@@ -1,0 +1,51 @@
+dp:
+  enabled: true
+  mode: static
+  accountant: rdp
+  clip_norm: 2.0
+  noise_multiplier: 0.3
+  delta: 1e-5
+  target_epsilon: 8.0
+  schedule:
+    type: ""
+    sigma_end_ratio: 1.0
+  adaptive_clip:
+    enabled: false
+    percentile: 0.9
+    ema: 0.2
+
+compression:
+  enabled: true
+  topk_ratio: 0.5
+  quant_bits: 16
+  error_feedback: true
+
+security:
+  secure_aggregation: true
+  mask_scale: 1.0
+  malicious_detection: true
+  loss_threshold: 6.0
+  norm_threshold: 6.0
+  require_both: true
+  min_mad: 0.05
+  robust_aggregation: trimmed_mean
+  trim_ratio: 0.1
+
+train:
+  algo: fedper
+  fedprox_mu: 0.01
+  deadline_ms: 15000
+
+model:
+  split:
+    backbone_keys:
+      - backbone.*
+    head_keys:
+      - head.*
+  public_head_eval:
+    enabled: true
+    data: train
+    batch_size: 128
+    epochs: 1
+    max_batches: 4
+    lr: 0.1

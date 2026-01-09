@@ -1,0 +1,86 @@
+dp:
+  enabled: true
+  mode: adaptive_rdp
+  accountant: rdp
+  clip_norm: 4.0
+  noise_multiplier: 0.3
+  delta: 1e-5
+  target_epsilon: 8.0
+  schedule:
+    type: cosine_decay
+    sigma_end_ratio: 0.5
+  adaptive_clip:
+    enabled: true
+    percentile: 0.95
+    ema: 0.2
+
+compression:
+  enabled: true
+  topk_ratio: 0.8
+  quant_bits: 16
+  error_feedback: true
+
+security:
+  secure_aggregation: true
+  mask_scale: 1.0
+  malicious_detection: true
+  loss_threshold: 8.0
+  norm_threshold: 8.0
+  require_both: true
+  min_mad: 0.15
+  robust_aggregation: krum
+  trim_ratio: 0.1
+  byzantine_f: 1
+  cosine_detection:
+    enabled: true
+    threshold: 2.5
+    top_k: 0
+  attack_simulation:
+    enabled: true
+    method: scale
+    scale: 200.0
+    malicious_fraction: 0.0
+    malicious_ranks: [0]
+    label_flip: true
+    loss_scale: 20.0
+    accuracy_scale: 0.1
+
+train:
+  algo: fedper_dual
+  fedprox_mu: 0.01
+  deadline_ms: 0
+  server_lr: 0.2
+  server_update_clip: 100.0
+  private_head_lr: 0.1
+  private_head_epochs: 2
+  lr: 0.02
+  epochs: 2
+
+model:
+  split:
+    backbone_keys:
+      - backbone.*
+    head_keys:
+      - head.*
+    private_head_keys:
+      - private_head.*
+  public_head_eval:
+    enabled: false
+    data: train
+    batch_size: 128
+    epochs: 1
+    max_batches: 4
+    lr: 0.1
+
+data:
+  alpha: 0.2
+
+sampling:
+  enabled: true
+  strategy: score
+  epsilon: 0.1
+  score_ema: 0.2
+  timeout_penalty: 0.5
+  anomaly_penalty: 1.0
+  fairness_window: 3
+  softmax_temp: 1.0

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FedGuard 仪表盘</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/dashboard.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div>
+          <div class="title-row">
+            <h1>FedGuard 仪表盘</h1>
+            <button id="help-btn" class="help-btn" type="button">帮助</button>
+          </div>
+          <p>联邦学习 · 隐私 · 通信 · 安全</p>
+        </div>
+        <div class="status">
+          <div class="badge">轮次 <span id="round-id">-</span></div>
+          <div class="badge">客户端 <span id="clients-count">0</span></div>
+        </div>
+      </header>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <span class="label">轮次</span>
+          <span class="value" id="summary-round">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">K / N</span>
+          <span class="value" id="summary-participants">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">轮次耗时</span>
+          <span class="value" id="summary-round-time">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">DP 模式</span>
+          <span class="value" id="summary-dp">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">聚合</span>
+          <span class="value" id="summary-agg">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">采样</span>
+          <span class="value" id="summary-sampling">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">ε 最大值</span>
+          <span class="value" id="summary-epsilon">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">上传 KB</span>
+          <span class="value" id="summary-upload">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">压缩比</span>
+          <span class="value" id="summary-compress">-</span>
+        </div>
+        <div class="summary-card">
+          <span class="label">拉黑</span>
+          <span class="value" id="summary-excluded">-</span>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-target="client-panel">客户端指标</button>
+        <button class="tab" data-target="client-manage-panel">客户端管理</button>
+        <button class="tab" data-target="server-panel">服务端聚合</button>
+      </div>
+
+      <section id="client-panel" class="panel active">
+        <div class="grid">
+          <div class="card chart-card">
+            <h2>损失曲线</h2>
+            <canvas id="loss-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>准确率曲线</h2>
+            <canvas id="acc-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>隐私预算 ε</h2>
+            <canvas id="epsilon-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>噪声 / 裁剪率</h2>
+            <canvas id="dp-control-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>通信负载</h2>
+            <canvas id="comm-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>客户端更新</h2>
+            <div class="pager">
+              <button id="client-updates-prev" type="button" aria-label="上一轮">
+                ◀
+              </button>
+              <span id="client-updates-label">轮次 -</span>
+              <button id="client-updates-next" type="button" aria-label="下一轮">
+                ▶
+              </button>
+            </div>
+          </div>
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>客户端</th>
+                <th>状态</th>
+                <th>损失</th>
+                <th>准确率</th>
+                <th>ε</th>
+                <th>上传 KB</th>
+                <th>标签</th>
+              </tr>
+            </thead>
+            <tbody id="client-update-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="client-manage-panel" class="panel">
+        <div class="card online-card">
+          <h2>在线客户端</h2>
+          <ul id="client-list" class="client-list compact"></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>客户端管理</h2>
+          </div>
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>客户端</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="client-manage-body"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>告警日志</h2>
+          <table class="alert-table">
+            <thead>
+              <tr>
+                <th>轮次</th>
+                <th>时间</th>
+                <th>客户端</th>
+                <th>原因</th>
+                <th>动作</th>
+              </tr>
+            </thead>
+            <tbody id="alert-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="server-panel" class="panel">
+        <div class="grid">
+          <div class="card chart-card">
+            <h2>服务端评估损失</h2>
+            <canvas id="server-loss-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>服务端评估准确率</h2>
+            <canvas id="server-acc-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>聚合更新范数</h2>
+            <canvas id="server-update-chart"></canvas>
+          </div>
+          <div class="card chart-card">
+            <h2>个体准确率公平性</h2>
+            <canvas id="fairness-chart"></canvas>
+          </div>
+          <div class="card">
+            <h2>服务端摘要</h2>
+            <ul id="server-summary" class="client-list"></ul>
+          </div>
+          <div class="card">
+            <h2>检测摘要</h2>
+            <ul id="security-summary" class="client-list"></ul>
+          </div>
+          <div class="card">
+            <h2>相似度排名</h2>
+            <ul id="similarity-rank" class="client-list"></ul>
+          </div>
+        </div>
+
+      </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/dashboard.js"></script>
+
+    <div
+      id="help-modal"
+      class="modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-title"
+      aria-hidden="true"
+      hidden
+    >
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="help-title">指标说明</h2>
+          <button id="help-close" class="modal-close" type="button">关闭</button>
+        </div>
+        <div class="modal-body">
+          <h3>客户端指标</h3>
+          <ul class="modal-list">
+            <li><strong>损失曲线</strong>：每轮客户端训练损失的加权均值。</li>
+            <li><strong>准确率曲线</strong>：每轮客户端训练准确率的加权均值。</li>
+            <li><strong>隐私预算 ε</strong>：每轮客户端隐私消耗的最大值/均值，以及隐私会计累计值。</li>
+            <li><strong>噪声 / 裁剪率</strong>：DP 噪声乘子与梯度裁剪比例。</li>
+            <li><strong>通信负载</strong>：本轮上传 KB 与压缩比。</li>
+          </ul>
+
+          <h3>服务端聚合</h3>
+          <ul class="modal-list">
+            <li><strong>服务端评估损失/准确率</strong>：聚合后的全局模型在验证集上的表现。</li>
+            <li><strong>聚合更新范数</strong>：本轮聚合更新的向量范数。</li>
+            <li><strong>个体准确率公平性</strong>：参与客户端的准确率均值、最小值、标准差与 Jain 指数。</li>
+          </ul>
+
+          <h3>概览卡片</h3>
+          <ul class="modal-list">
+            <li><strong>K / N</strong>：本轮参与聚合的客户端数 / 在线可选客户端数。</li>
+            <li><strong>轮次耗时</strong>：本轮端到端耗时（毫秒）。</li>
+            <li><strong>DP 模式</strong>：当前差分隐私模式（关闭或具体模式）。</li>
+            <li><strong>聚合</strong>：服务端聚合算法类型。</li>
+            <li><strong>采样</strong>：客户端选择策略与模式。</li>
+            <li><strong>ε 最大值</strong>：本轮客户端隐私消耗最大值。</li>
+            <li><strong>压缩比</strong>：压缩前后字节比值。</li>
+            <li><strong>拉黑</strong>：被检测并拉黑的客户端数量。</li>
+          </ul>
+
+          <h3>列表与告警</h3>
+          <ul class="modal-list">
+            <li><strong>在线客户端</strong>：当前在线与已拉黑状态。</li>
+            <li><strong>客户端更新</strong>：每轮客户端的损失、准确率、隐私 ε、上传量与标签分布。</li>
+            <li><strong>客户端管理</strong>：手动拉黑或解除在线客户端。</li>
+            <li><strong>检测摘要</strong>：恶意检测精确率/召回率/F1 与阈值。</li>
+            <li><strong>相似度排名</strong>：客户端更新与参考方向的相似度 z 分数排名。</li>
+            <li><strong>告警日志</strong>：异常原因与处置记录。</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
