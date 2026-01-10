@@ -3,7 +3,7 @@ from typing import Dict, Tuple
 
 import torch
 
-# DifferentialPrivacyAgent（AGENT.md 3.2.J）：裁剪 + 高斯噪声
+# DifferentialPrivacyModule（AGENT.md 3.2.J）：裁剪 + 高斯噪声
 
 
 def _state_to_tensors(state: Dict[str, list]) -> Dict[str, torch.Tensor]:

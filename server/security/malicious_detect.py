@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
-# MaliciousDetectionAgent（AGENT.md 3.1.E）：
+# MaliciousDetectionModule（AGENT.md 3.1.E）：
 # - 基于 loss/norm 的 MAD 异常检测
 # - 可选的余弦相似度异常检测
 
@@ -52,7 +52,7 @@ def _cosine_similarity(vec: torch.Tensor, mean_vec: torch.Tensor) -> float:
     return float(torch.dot(vec, mean_vec) / denom)
 
 
-class MaliciousDetectionAgent:
+class MaliciousDetectionModule:
     # 恶意检测：输出异常客户端列表与诊断信息
     def __init__(
         self,

@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
-# DataAgent（AGENT.md 3.2.H）：Dirichlet 非 IID 切分 + 标签直方图
+# DataModule（AGENT.md 3.2.H）：Dirichlet 非 IID 切分 + 标签直方图
 
 
 def load_mnist(data_dir: str, download: bool = True) -> datasets.MNIST:

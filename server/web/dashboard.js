@@ -3,7 +3,7 @@ if (typeof Chart === "undefined") {
 }
 
 // Dashboard 前端逻辑（AGENT.md 3.1.G / 5.x）：
-// - 消费 MetricsAgent 推送的轮次指标
+// - 消费 MetricsModule 推送的轮次指标
 // - 渲染客户端/服务端曲线、告警与管理视图
 const state = {
   rounds: [],
@@ -73,6 +73,7 @@ function resetSummaryCards() {
     "summary-upload": "-",
     "summary-compress": "-",
     "summary-excluded": "-",
+    "summary-timeout": "-",
   };
   Object.keys(mapping).forEach((key) => {
     const el = document.getElementById(key);
@@ -132,13 +133,43 @@ function resetUiState() {
   rebuildSeries();
 }
 
+function updateSpinner(active) {
+  const spinner = document.getElementById("spinner");
+  if (spinner) {
+    spinner.style.display = active ? "inline-block" : "none";
+  }
+}
+
 function setLaunchStatus(text, isError) {
   const el = document.getElementById("launch-status");
+  const dot = document.getElementById("status-dot");
+  const startBtn = document.getElementById("launch-start");
+  const stopBtn = document.getElementById("launch-stop");
   if (!el) {
     return;
   }
-  el.textContent = text;
-  el.style.color = isError ? "#ff7a7a" : "";
+  // Remove "状态：" prefix if present for cleaner display in header
+  el.textContent = text.replace(/^状态：/, "");
+  
+  if (startBtn && stopBtn) {
+    const running =
+      text.includes("运行中") || text.includes("启动中") || text.includes("停止中");
+    startBtn.classList.toggle("is-active", !running);
+    stopBtn.classList.toggle("is-active", running);
+  }
+
+  if (dot) {
+    if (isError) {
+      dot.style.color = "#ef4444";
+      updateSpinner(false);
+    } else if (text.includes("运行中") || text.includes("启动中") || text.includes("停止中")) {
+      dot.style.color = "#10b981";
+      updateSpinner(true);
+    } else {
+      dot.style.color = "#94a3b8";
+      updateSpinner(false);
+    }
+  }
 }
 
 function getLaunchElements() {
@@ -392,7 +423,18 @@ async function loadSessionStatus() {
     }
     const payload = await resp.json();
     const running = !!payload.running;
-    setLaunchStatus(running ? "状态：运行中" : "状态：未启动", false);
+    const status = String(payload.status || "");
+    if (running) {
+      setLaunchStatus("状态：运行中", false);
+    } else if (status === "completed") {
+      setLaunchStatus("状态：已结束", false);
+    } else if (status === "stopped") {
+      setLaunchStatus("状态：已停止", false);
+    } else if (status === "error") {
+      setLaunchStatus("状态：异常", true);
+    } else {
+      setLaunchStatus("状态：未启动", false);
+    }
     const params = payload.params || {};
     const elements = getLaunchElements();
     if (elements.numClients && params.num_clients) {
@@ -557,16 +599,16 @@ function createLineChart(ctx, label, color) {
       },
       scales: {
         x: {
-          ticks: { color: "#c8d4e3", padding: 6, maxRotation: 0, autoSkip: true },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: { color: "#94a3b8", padding: 6, maxRotation: 0, autoSkip: true },
+          grid: { color: "rgba(148, 163, 184, 0.1)" },
         },
         y: {
-          ticks: { color: "#c8d4e3", padding: 6 },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: { color: "#94a3b8", padding: 6 },
+          grid: { color: "rgba(148, 163, 184, 0.1)" },
         },
       },
       plugins: {
-        legend: { labels: { color: "#e6edf5" } },
+        legend: { labels: { color: "#f1f5f9" } },
       },
     },
   });
@@ -581,7 +623,7 @@ function createDualChart(ctx) {
         {
           label: "上传 KB",
           data: [],
-          borderColor: "#ffb454",
+          borderColor: "#3b82f6",
           backgroundColor: "transparent",
           tension: 0.3,
           borderWidth: 2,
@@ -590,7 +632,7 @@ function createDualChart(ctx) {
         {
           label: "压缩比",
           data: [],
-          borderColor: "#42c2ff",
+          borderColor: "#06b6d4",
           backgroundColor: "transparent",
           tension: 0.3,
           borderWidth: 2,
@@ -607,29 +649,29 @@ function createDualChart(ctx) {
       },
       scales: {
         x: {
-          ticks: { color: "#c8d4e3", padding: 6, maxRotation: 0, autoSkip: true },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: { color: "#94a3b8", padding: 6, maxRotation: 0, autoSkip: true },
+          grid: { color: "rgba(148, 163, 184, 0.1)" },
         },
       y: {
-        ticks: { color: "#c8d4e3", padding: 6 },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6 },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
       y1: {
         position: "right",
-        ticks: { color: "#c8d4e3", padding: 6 },
+        ticks: { color: "#94a3b8", padding: 6 },
         grid: { display: false },
       },
       },
       plugins: {
-        legend: { labels: { color: "#e6edf5" } },
+        legend: { labels: { color: "#f1f5f9" } },
       },
     },
   });
 }
 
 // 客户端侧曲线
-const lossChart = createLineChart(document.getElementById("loss-chart"), "损失", "#ffb454");
-const accChart = createLineChart(document.getElementById("acc-chart"), "准确率", "#42c2ff");
+const lossChart = createLineChart(document.getElementById("loss-chart"), "损失", "#f59e0b");
+const accChart = createLineChart(document.getElementById("acc-chart"), "准确率", "#3b82f6");
 const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
   type: "line",
   data: {
@@ -638,7 +680,7 @@ const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
       {
         label: "ε 最大值",
         data: [],
-        borderColor: "#9bffb4",
+        borderColor: "#10b981",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -647,7 +689,7 @@ const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
       {
         label: "ε 平均值",
         data: [],
-        borderColor: "#ffd166",
+        borderColor: "#f59e0b",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -656,7 +698,7 @@ const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
       {
         label: "ε 记账器",
         data: [],
-        borderColor: "#7bdff2",
+        borderColor: "#06b6d4",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -682,13 +724,13 @@ const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
     },
     scales: {
       x: {
-        ticks: { color: "#c8d4e3", padding: 6, maxRotation: 0, autoSkip: true },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6, maxRotation: 0, autoSkip: true },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
-      y: { ticks: { color: "#c8d4e3", padding: 6 }, grid: { color: "rgba(255,255,255,0.06)" } },
+      y: { ticks: { color: "#94a3b8", padding: 6 }, grid: { color: "rgba(148, 163, 184, 0.1)" } },
     },
     plugins: {
-      legend: { labels: { color: "#e6edf5" } },
+      legend: { labels: { color: "#f1f5f9" } },
     },
   },
 });
@@ -702,7 +744,7 @@ const dpControlChart = new Chart(document.getElementById("dp-control-chart"), {
       {
         label: "噪声乘子",
         data: [],
-        borderColor: "#ff9f68",
+        borderColor: "#f59e0b",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -711,7 +753,7 @@ const dpControlChart = new Chart(document.getElementById("dp-control-chart"), {
       {
         label: "裁剪率",
         data: [],
-        borderColor: "#9be7ff",
+        borderColor: "#3b82f6",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -728,38 +770,38 @@ const dpControlChart = new Chart(document.getElementById("dp-control-chart"), {
     },
     scales: {
       x: {
-        ticks: { color: "#c8d4e3", padding: 6, maxRotation: 0, autoSkip: true },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6, maxRotation: 0, autoSkip: true },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
       y: {
-        ticks: { color: "#c8d4e3", padding: 6 },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6 },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
       y1: {
         position: "right",
-        ticks: { color: "#c8d4e3", padding: 6, min: 0, max: 1 },
+        ticks: { color: "#94a3b8", padding: 6, min: 0, max: 1 },
         grid: { display: false },
       },
     },
     plugins: {
-      legend: { labels: { color: "#e6edf5" } },
+      legend: { labels: { color: "#f1f5f9" } },
     },
   },
 });
 const serverLossChart = createLineChart(
   document.getElementById("server-loss-chart"),
   "评估损失",
-  "#ff7a7a"
+  "#ef4444"
 );
 const serverAccChart = createLineChart(
   document.getElementById("server-acc-chart"),
   "评估准确率",
-  "#6dd3a8"
+  "#10b981"
 );
 const serverUpdateChart = createLineChart(
   document.getElementById("server-update-chart"),
   "更新范数",
-  "#5bd1ff"
+  "#06b6d4"
 );
 const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
   type: "line",
@@ -769,7 +811,7 @@ const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
       {
         label: "个体准确率均值",
         data: [],
-        borderColor: "#ffd166",
+        borderColor: "#f59e0b",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -778,7 +820,7 @@ const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
       {
         label: "个体准确率最小值",
         data: [],
-        borderColor: "#ff7a7a",
+        borderColor: "#ef4444",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -787,7 +829,7 @@ const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
       {
         label: "个体准确率标准差",
         data: [],
-        borderColor: "#9be7ff",
+        borderColor: "#3b82f6",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -796,7 +838,7 @@ const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
       {
         label: "Jain 指数",
         data: [],
-        borderColor: "#9bffb4",
+        borderColor: "#10b981",
         backgroundColor: "transparent",
         tension: 0.3,
         borderWidth: 2,
@@ -813,16 +855,16 @@ const fairnessChart = new Chart(document.getElementById("fairness-chart"), {
     },
     scales: {
       x: {
-        ticks: { color: "#c8d4e3", padding: 6, maxRotation: 0, autoSkip: true },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6, maxRotation: 0, autoSkip: true },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
       y: {
-        ticks: { color: "#c8d4e3", padding: 6, min: 0, max: 1 },
-        grid: { color: "rgba(255,255,255,0.06)" },
+        ticks: { color: "#94a3b8", padding: 6, min: 0, max: 1 },
+        grid: { color: "rgba(148, 163, 184, 0.1)" },
       },
     },
     plugins: {
-      legend: { labels: { color: "#e6edf5" } },
+      legend: { labels: { color: "#f1f5f9" } },
     },
   },
 });
@@ -1014,6 +1056,7 @@ function updateSummaryCards(metric) {
   const uploadKb = (metric.comm?.upload_bytes_total || 0) / 1024.0;
   const compressedRatio = metric.comm?.compressed_ratio || 1;
   const excluded = metric.client_counts?.blacklisted ?? state.excludedClients.size;
+  const timeoutCount = (metric.dropped_clients || []).length;
 
   document.getElementById("summary-round").textContent = roundId;
   document.getElementById("summary-participants").textContent = `${participants.length}/${eligible}`;
@@ -1025,6 +1068,7 @@ function updateSummaryCards(metric) {
   document.getElementById("summary-upload").textContent = uploadKb.toFixed(1);
   document.getElementById("summary-compress").textContent = compressedRatio.toFixed(2);
   document.getElementById("summary-excluded").textContent = excluded;
+  document.getElementById("summary-timeout").textContent = timeoutCount;
 }
 
 function updateClientUpdates(updates) {
@@ -1485,6 +1529,7 @@ function applyMetric(metric) {
 
 let pollTimer = null;
 let uiInitialized = false;
+let sessionPoller = null;
 let wsClient = null;
 let wsRetryTimer = null;
 
@@ -1636,10 +1681,16 @@ async function init() {
     }
 
     setupHelpModal();
+    setLaunchStatus("状态：未启动", false);
     await loadDefaultConfig();
     await loadSessionStatus();
     await loadHistory();
     await refreshOnlineClients();
+    if (!sessionPoller) {
+      sessionPoller = window.setInterval(() => {
+        loadSessionStatus();
+      }, 4000);
+    }
     uiInitialized = true;
   }
 

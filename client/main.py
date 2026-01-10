@@ -10,11 +10,11 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import torch
 
 from client.comm.api_client import ApiClient, ApiError
-from client.compression.error_feedback import ErrorFeedbackAgent
-from client.compression.topk import CompressionAgent
+from client.compression.error_feedback import ErrorFeedbackModule
+from client.compression.topk import CompressionModule
 from client.data.partition import get_client_loader
 from client.privacy.dp import apply_dp
-from client.secure.mask import SecureMaskingAgent
+from client.secure.mask import SecureMaskingModule
 from client.security.attack import AttackSimulator
 from client.train.local_trainer import (
     create_model,
@@ -234,7 +234,7 @@ def main() -> int:
     args = _parse_args()
     api = ApiClient(args.server_url, timeout=args.request_timeout)
     try:
-        # 注册客户端（ClientManagerAgent）
+        # 注册客户端（ClientManagerModule）
         client_id = _register_with_retry(api, args.client_name, args.join_timeout)
     except ApiError as exc:
         print(f"[client] failed to join server: {exc}", flush=True)
@@ -296,14 +296,14 @@ def main() -> int:
     topk_ratio = float(compression_config.get("topk_ratio", 1.0))
     quant_bits = int(compression_config.get("quant_bits", 8))
     error_feedback_enabled = bool(compression_config.get("error_feedback", False))
-    compressor = CompressionAgent(topk_ratio=topk_ratio, quant_bits=quant_bits)
-    secure_compressor = CompressionAgent(topk_ratio=1.0, quant_bits=quant_bits)
-    error_feedback = ErrorFeedbackAgent()
+    compressor = CompressionModule(topk_ratio=topk_ratio, quant_bits=quant_bits)
+    secure_compressor = CompressionModule(topk_ratio=1.0, quant_bits=quant_bits)
+    error_feedback = ErrorFeedbackModule()
 
     # 安全聚合与攻击模拟参数
     secure_aggregation = bool(security_config.get("secure_aggregation", False))
     mask_scale = float(security_config.get("mask_scale", 1.0))
-    masking_agent = SecureMaskingAgent(mask_scale=mask_scale)
+    masking_agent = SecureMaskingModule(mask_scale=mask_scale)
     attack_cfg = security_config.get("attack_simulation", {})
     attack_enabled = bool(attack_cfg.get("enabled", False))
     attack_method = str(attack_cfg.get("method", "none")).lower()
@@ -324,7 +324,7 @@ def main() -> int:
         )
 
     try:
-        # DataAgent：非 IID 数据切分（Dirichlet）
+        # DataModule：非 IID 数据切分（Dirichlet）
         data_config = config.get("data", {})
         alpha = float(data_config.get("alpha", args.alpha))
         train_loader, label_hist = get_client_loader(
@@ -491,7 +491,7 @@ def main() -> int:
         pre_dp_norm = None
         clip_applied = None
         if dp_enabled_round:
-            # DifferentialPrivacyAgent：裁剪 + 高斯噪声 + ε 估计
+            # DifferentialPrivacyModule：裁剪 + 高斯噪声 + ε 估计
             sample_rate = min(1.0, float(args.batch_size) / max(num_samples, 1))
             delta_state, epsilon, pre_dp_norm, clip_applied = apply_dp(
                 delta_state,
@@ -512,7 +512,7 @@ def main() -> int:
         compressed_update = None
         compressed_type = None
         if round_secure:
-            # SecureMaskingAgent：对更新做 pairwise 掩码
+            # SecureMaskingModule：对更新做 pairwise 掩码
             if not participants:
                 print("[client] missing participants list for secure aggregation", flush=True)
                 time.sleep(args.heartbeat_interval)
@@ -545,7 +545,7 @@ def main() -> int:
                 compressed_type = "delta"
 
         try:
-            # CommAgent：提交更新 + 统计指标
+            # CommModule：提交更新 + 统计指标
             delta_payload = None if round_secure or compression_enabled else delta_state
             payload_obj = masked_update or compressed_update or delta_payload or {}
             upload_bytes = len(json.dumps(payload_obj).encode("utf-8"))

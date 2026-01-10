@@ -9,21 +9,21 @@ from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 import torch
 
 from server.aggregation.fedavg import (
-    AggregationAgent,
+    AggregationModule,
     apply_delta,
     apply_delta_partial,
     create_model,
     init_model_state,
 )
-from server.aggregation.secure_agg import SecureAggregationAgent
+from server.aggregation.secure_agg import SecureAggregationModule
 from server.privacy.accountant import RDPAccountant
-from server.security.malicious_detect import MaliciousDetectionAgent
+from server.security.malicious_detect import MaliciousDetectionModule
 
 
-# CoordinatorAgent（AGENT.md 3.1.A）：
+# CoordinatorModule（AGENT.md 3.1.A）：
 # - 轮次调度、客户端采样、模型下发、聚合触发
 # - DP 参数下发、超时处理、指标记录
-class CoordinatorAgent:
+class CoordinatorModule:
     def __init__(
         self,
         max_rounds: int,
@@ -88,14 +88,14 @@ class CoordinatorAgent:
         self._deadline_timer: Optional[threading.Timer] = None
         self._eval_loader = None
         self._lock = threading.Lock()
-        # AggregationAgent：FedAvg + 鲁棒聚合
-        self._aggregator = AggregationAgent()
-        self._secure_agg = SecureAggregationAgent()
+        # AggregationModule：FedAvg + 鲁棒聚合
+        self._aggregator = AggregationModule()
+        self._secure_agg = SecureAggregationModule()
         self._forced_timeouts: Set[str] = set()
         self._cooldown_until: Dict[str, int] = {}
         self._cosine_reference: Optional[Dict[str, list]] = None
-        # MaliciousDetectionAgent：统计异常 + 余弦相似度检测
-        self._detector = MaliciousDetectionAgent(
+        # MaliciousDetectionModule：统计异常 + 余弦相似度检测
+        self._detector = MaliciousDetectionModule(
             loss_threshold=loss_threshold,
             norm_threshold=norm_threshold,
             require_both=require_both,
@@ -235,7 +235,7 @@ class CoordinatorAgent:
         return set()
 
     def _eligible_clients(self) -> List[str]:
-        # 可参与客户端：在线且未拉黑（ClientManagerAgent）
+        # 可参与客户端：在线且未拉黑（ClientManagerModule）
         if self.eligible_clients_provider is not None:
             eligible = list(self.eligible_clients_provider())
         else:
@@ -953,7 +953,7 @@ class CoordinatorAgent:
         participants: Optional[List[str]] = None,
         detection: Optional[Dict[str, object]] = None,
     ) -> None:
-        # 轮次指标打包并交给 MetricsAgent（AGENT.md 3.1.F/G）
+        # 轮次指标打包并交给 MetricsModule（AGENT.md 3.1.F/G）
         if self.metrics_agent is None:
             return
         epsilons = [float(update.get("epsilon") or 0.0) for update in updates]

@@ -39,10 +39,16 @@ class LocalDemoRunner:
         self._lock = threading.Lock()
         self._client_procs: List[subprocess.Popen] = []
         self.last_error: str = ""
+        self.last_status: str = "idle"
         self.last_params: Dict[str, object] = {}
 
     def is_running(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
+
+    def status(self) -> str:
+        if self.is_running():
+            return "running"
+        return self.last_status or "idle"
 
     def start(
         self,
@@ -62,6 +68,7 @@ class LocalDemoRunner:
             if self.is_running():
                 return False
             self.last_error = ""
+            self.last_status = "running"
             self.last_params = {
                 "num_clients": num_clients,
                 "client_batch_size": client_batch_size,
@@ -94,6 +101,7 @@ class LocalDemoRunner:
     def stop(self) -> None:
         self._stop_event.set()
         self._terminate_all()
+        self.last_status = "stopped"
 
     def _spawn(self, cmd: List[str], name: str) -> subprocess.Popen:
         env = os.environ.copy()
@@ -242,6 +250,12 @@ class LocalDemoRunner:
                         proc.wait()
         except Exception as exc:
             self.last_error = str(exc)
+            self.last_status = "error"
             print(f"[launcher] failed: {exc}", flush=True)
         finally:
             self._terminate_all()
+            if self.last_status != "error":
+                if self._stop_event.is_set():
+                    self.last_status = "stopped"
+                else:
+                    self.last_status = "completed"

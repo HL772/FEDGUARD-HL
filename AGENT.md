@@ -44,13 +44,13 @@
 
 ---
 
-## 3. Agent（功能模块）划分与职责边界
+## 3. Module（功能模块）划分与职责边界
 
-> 以“Agent = 可验收的功能模块”划分，确保每个要求项都有明确对应模块。:contentReference[oaicite:1]{index=1}
+> 以“Module = 可验收的功能模块”划分，确保每个要求项都有明确对应模块。:contentReference[oaicite:1]{index=1}
 
-### 3.1 Server 侧 Agents
+### 3.1 Server 侧 Modules
 
-#### A. CoordinatorAgent（联邦调度 / 轮次控制）
+#### A. CoordinatorModule（联邦调度 / 轮次控制）
 - **职责**
   - 控制 Round 循环：采样客户端 → 下发模型/配置 → 收集更新 → 触发聚合 → 写入指标
   - 支持 `clients_per_round=K` 抽样（通信优化的一部分）
@@ -59,7 +59,7 @@
 - **输出**：θ_{t+1}、round_summary（耗时、参与列表、失败列表）
 - **验收点**：单机启动 N 客户端后可稳定跑 ≥10 轮
 
-#### B. ClientManagerAgent（客户端注册与状态）
+#### B. ClientManagerModule（客户端注册与状态）
 - **职责**
   - 客户端注册、心跳、在线状态维护
   - 黑名单管理（与恶意检测联动）
@@ -67,7 +67,7 @@
 - **输出**：client_id、在线状态、参与资格
 - **验收点**：Dashboard/接口可看到在线客户端与本轮参与客户端
 
-#### C. AggregationAgent（聚合 + 鲁棒聚合）
+#### C. AggregationModule（聚合 + 鲁棒聚合）
 - **职责**
   - FedAvg（按样本数加权）
   - 鲁棒聚合：`trimmed_mean` / `median`
@@ -75,7 +75,7 @@
 - **输出**：聚合更新 ΣΔθ 或 θ_{t+1}
 - **验收点**：恶意客户端注入时，鲁棒聚合比普通FedAvg更稳定
 
-#### D. SecureAggregationAgent（安全聚合：Server端）
+#### D. SecureAggregationModule（安全聚合：Server端）
 - **职责**
   - 接收 `masked_update_i` 并求和，得到聚合更新（掩码抵消）
   - 不应暴露任何单客户端更新内容
@@ -83,7 +83,7 @@
 - **输出**：ΣΔθ（聚合结果）
 - **验收点**：Server 端日志/API 只能得到聚合和，无法还原单体更新
 
-#### E. MaliciousDetectionAgent（恶意/异常检测）
+#### E. MaliciousDetectionModule（恶意/异常检测）
 - **职责**
   - 检测异常客户端并触发策略：告警、剔除、降权、黑名单
 - **检测模式（与安全聚合兼容）**
@@ -95,7 +95,7 @@
 - **输出**：anomaly_score、alerts、excluded_clients、blacklist_updates
 - **验收点**：sign-flip / scaling 攻击能触发告警与剔除
 
-#### F. MetricsAgent（指标归档与对外API）
+#### F. MetricsModule（指标归档与对外API）
 - **职责**
   - 持久化每轮指标：收敛、隐私、通信、鲁棒/告警
   - 提供 REST 查询与 WebSocket 实时推送
@@ -103,19 +103,19 @@
 - **输出**：sqlite/jsonl 数据 + `/api/v1/metrics/*` + `/ws/metrics`
 - **验收点**：网页可实时显示曲线与告警列表
 
-#### G. WebDashboardAgent（网页监控系统：Server托管）
+#### G. WebDashboardModule（网页监控系统：Server托管）
 - **职责**
   - 提供浏览器页面 `/dashboard`
   - 图表实时刷新（优先WebSocket，备选轮询）
-- **输入**：MetricsAgent 输出的指标流
+- **输入**：MetricsModule 输出的指标流
 - **输出**：网页可视化（收敛/隐私/通信/安全）
 - **验收点**：打开浏览器即能看到训练实时状态与关键指标
 
 ---
 
-### 3.2 Client 侧 Agents（每个Client进程拥有一套）
+### 3.2 Client 侧 Modules（每个Client进程拥有一套）
 
-#### H. DataAgent（非IID数据切分与加载）
+#### H. DataModule（非IID数据切分与加载）
 - **职责**
   - 通过 Dirichlet(α) 切分数据，模拟非IID
   - 输出 label 分布统计给Dashboard展示
@@ -123,7 +123,7 @@
 - **输出**：本地数据 D_i + label_histogram
 - **验收点**：不同客户端 label 分布明显不同（α越小越明显）
 
-#### I. LocalTrainerAgent（本地训练：FedAvg/FedProx）
+#### I. LocalTrainerModule（本地训练：FedAvg/FedProx）
 - **职责**
   - 在本地数据上训练若干 epochs/steps
   - 可切换 FedProx（缓解非IID漂移）
@@ -131,7 +131,7 @@
 - **输出**：Δθ_i、local_loss/acc、n_i
 - **验收点**：非IID条件下 FedProx 收敛更稳定（对比曲线）
 
-#### J. DifferentialPrivacyAgent（差分隐私：DP-SGD）
+#### J. DifferentialPrivacyModule（差分隐私：DP-SGD）
 - **职责**
   - 梯度裁剪 + 高斯噪声
   - 计算隐私预算（ε/δ）并随轮次上报
@@ -139,7 +139,7 @@
 - **输出**：Δθ_i^DP、epsilon_i
 - **验收点**：DP开启时网页显示 ε 曲线；关闭DP时不消耗预算
 
-#### K. CompressionAgent（压缩：Top-K + 量化 + 误差反馈）
+#### K. CompressionModule（压缩：Top-K + 量化 + 误差反馈）
 - **职责**
   - Top-K 稀疏化（发送重要参数）
   - 8-bit/16-bit 量化（带scale）
@@ -148,14 +148,14 @@
 - **输出**：compressed_update + new_residual_state + payload_size
 - **验收点**：网页通信量明显下降，精度接近未压缩版本
 
-#### L. SecureMaskingAgent（安全聚合：Client端掩码）
+#### L. SecureMaskingModule（安全聚合：Client端掩码）
 - **职责**
   - 生成 pairwise masks，对更新加掩码
 - **输入**：compressed_update、本轮参与集合 S、(简化) seeds
 - **输出**：masked_update
 - **验收点**：客户端可本地打印单体Δθ；Server无法获取单体Δθ
 
-#### M. CommAgent（与Server通信）
+#### M. CommModule（与Server通信）
 - **职责**
   - join/heartbeat
   - 拉取本轮配置与模型
@@ -168,20 +168,20 @@
 
 ## 4. 单机多进程“Round”端到端流程
 
-1. **Server(CoordinatorAgent)** 选择参与客户端集合 S（K个）并生成 round_config
+1. **Server(CoordinatorModule)** 选择参与客户端集合 S（K个）并生成 round_config
 2. Server 下发：`θ_t + round_config`（DP参数、压缩参数、是否安全聚合、deadline）
 3. **Client进程**：
-   - DataAgent 准备本地数据
-   - LocalTrainerAgent 训练得到 Δθ_i
-   - DifferentialPrivacyAgent 处理得到 Δθ_i^DP 与 epsilon_i
-   - CompressionAgent 压缩得到 compressed_update_i（记录payload字节）
-   - SecureMaskingAgent 掩码得到 masked_update_i（若启用安全聚合）
-   - CommAgent 上传 masked_update_i + local_metrics
+   - DataModule 准备本地数据
+   - LocalTrainerModule 训练得到 Δθ_i
+   - DifferentialPrivacyModule 处理得到 Δθ_i^DP 与 epsilon_i
+   - CompressionModule 压缩得到 compressed_update_i（记录payload字节）
+   - SecureMaskingModule 掩码得到 masked_update_i（若启用安全聚合）
+   - CommModule 上传 masked_update_i + local_metrics
 4. **Server**：
-   - SecureAggregationAgent 求和得到聚合更新
-   - MaliciousDetectionAgent 检测异常（安全聚合开则基于统计，关则可用向量）
-   - AggregationAgent（含鲁棒聚合）更新 θ_{t+1}
-   - MetricsAgent 写入指标并推送 WebSocket
+   - SecureAggregationModule 求和得到聚合更新
+   - MaliciousDetectionModule 检测异常（安全聚合开则基于统计，关则可用向量）
+   - AggregationModule（含鲁棒聚合）更新 θ_{t+1}
+   - MetricsModule 写入指标并推送 WebSocket
 5. **浏览器 Dashboard** 实时刷新：收敛曲线、ε、通信量、告警
 
 ---
@@ -221,37 +221,37 @@
 
 ---
 
-## 6. 目录结构（与Agent一一对应）
+## 6. 目录结构（与Module一一对应）
 
 ```text
 FedGuard/
   server/
     app.py                  # FastAPI入口：API + /dashboard + WS
-    orchestrator.py         # CoordinatorAgent
-    client_manager.py       # ClientManagerAgent
+    orchestrator.py         # CoordinatorModule
+    client_manager.py       # ClientManagerModule
     aggregation/
-      fedavg.py             # AggregationAgent
+      fedavg.py             # AggregationModule
       robust.py             # trimmed mean / median
-      secure_agg.py         # SecureAggregationAgent
+      secure_agg.py         # SecureAggregationModule
     security/
-      malicious_detect.py   # MaliciousDetectionAgent
+      malicious_detect.py   # MaliciousDetectionModule
     metrics/
-      store.py              # MetricsAgent（sqlite/jsonl）
+      store.py              # MetricsModule（sqlite/jsonl）
       schema.py
     web/
-      dashboard.html        # WebDashboardAgent页面
+      dashboard.html        # WebDashboardModule页面
       dashboard.js
   client/
     main.py                 # Client入口（每个进程一个client）
-    data/partition.py       # DataAgent（Dirichlet non-IID）
-    train/local_trainer.py  # LocalTrainerAgent + FedProx
-    privacy/dp.py           # DifferentialPrivacyAgent
+    data/partition.py       # DataModule（Dirichlet non-IID）
+    train/local_trainer.py  # LocalTrainerModule + FedProx
+    privacy/dp.py           # DifferentialPrivacyModule
     compression/
-      topk.py               # CompressionAgent
+      topk.py               # CompressionModule
       quant.py
       error_feedback.py
-    secure/mask.py          # SecureMaskingAgent
-    comm/api_client.py      # CommAgent
+    secure/mask.py          # SecureMaskingModule
+    comm/api_client.py      # CommModule
   experiments/
     configs/default.yaml
     scripts/

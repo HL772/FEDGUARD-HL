@@ -8,12 +8,12 @@ from fastapi import WebSocket
 
 from server.metrics.schema import normalize_round_metric
 
-# MetricsAgent（AGENT.md 3.1.F）：
+# MetricsModule（AGENT.md 3.1.F）：
 # - 轮次指标 JSONL 持久化
 # - WebSocket 实时推送
 
 
-class MetricsAgent:
+class MetricsModule:
     def __init__(self, jsonl_path: str, clear_on_start: bool = False) -> None:
         self._metrics: List[Dict[str, Any]] = []
         self._lock = threading.Lock()

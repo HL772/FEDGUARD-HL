@@ -65,7 +65,7 @@ def train_one_epoch(
     label_flip: bool = False,
     num_classes: int = 10,
 ) -> Tuple[float, int, int, float]:
-    # LocalTrainerAgent（AGENT.md 3.2.I）：FedAvg/FedProx 单轮训练
+    # LocalTrainerModule（AGENT.md 3.2.I）：FedAvg/FedProx 单轮训练
     model.to(device)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)

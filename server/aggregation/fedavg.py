@@ -69,8 +69,8 @@ def apply_delta_partial(
     return updated
 
 
-class AggregationAgent:
-    # AggregationAgent（AGENT.md 3.1.C）：FedAvg + 鲁棒聚合
+class AggregationModule:
+    # AggregationModule（AGENT.md 3.1.C）：FedAvg + 鲁棒聚合
     def aggregate(
         self,
         updates: List[Dict[str, object]],

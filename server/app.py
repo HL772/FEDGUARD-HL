@@ -18,9 +18,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from server.client_manager import ClientManagerAgent
-from server.metrics.store import MetricsAgent
-from server.orchestrator import CoordinatorAgent
+from server.client_manager import ClientManagerModule
+from server.metrics.store import MetricsModule
+from server.orchestrator import CoordinatorModule
 from server.launcher import LocalDemoRunner
 from client.compression.topk import decompress_state
 
@@ -59,6 +59,13 @@ def _load_config(path: str) -> Dict[str, Any]:
                 line = raw_line.strip()
                 if not line or line.startswith("#"):
                     continue
+                # Remove inline comments
+                if "#" in line:
+                    line = line.split("#", 1)[0].strip()
+                
+                if not line:
+                    continue
+
                 if line.endswith(":"):
                     current_section = line[:-1].strip()
                     config[current_section] = {}
@@ -264,10 +271,10 @@ DEFAULT_CONFIG_PATH = _resolve_config_path(
 CONFIG = _load_config(DEFAULT_CONFIG_PATH)
 ONLINE_TTL_SEC = float(os.environ.get("ONLINE_TTL_SEC", "600"))
 
-CLIENT_MANAGER = ClientManagerAgent(online_ttl_sec=ONLINE_TTL_SEC)
+CLIENT_MANAGER = ClientManagerModule(online_ttl_sec=ONLINE_TTL_SEC)
 
-# MetricsAgent：轮次指标持久化与实时推送（性能监控）
-METRICS = MetricsAgent("server/metrics/metrics.jsonl", clear_on_start=True)
+# MetricsModule：轮次指标持久化与实时推送（性能监控）
+METRICS = MetricsModule("server/metrics/metrics.jsonl", clear_on_start=True)
 
 
 def _build_coordinator(
@@ -276,7 +283,7 @@ def _build_coordinator(
     max_rounds: int,
     clients_per_round: int,
     online_ttl_sec: float,
-) -> CoordinatorAgent:
+) -> CoordinatorModule:
     security_cfg = config.get("security", {})
     dp_cfg = config.get("dp", {})
     compression_cfg = config.get("compression", {})
@@ -286,10 +293,10 @@ def _build_coordinator(
     cosine_cfg = security_cfg.get("cosine_detection", {})
 
     global CLIENT_MANAGER
-    CLIENT_MANAGER = ClientManagerAgent(online_ttl_sec=online_ttl_sec)
+    CLIENT_MANAGER = ClientManagerModule(online_ttl_sec=online_ttl_sec)
     eligible_provider = CLIENT_MANAGER.eligible_client_ids
 
-    return CoordinatorAgent(
+    return CoordinatorModule(
         max_rounds=max_rounds,
         clients_per_round=clients_per_round,
         lr=float(os.environ.get("LR", train_cfg.get("lr", 0.1))),
@@ -510,6 +517,7 @@ class StartSessionRequest(BaseModel):
 
 class SessionStatusResponse(BaseModel):
     running: bool
+    status: Optional[str] = None
     config_path: Optional[str] = None
     runtime_config_path: Optional[str] = None
     params: Dict[str, object] = {}
@@ -518,7 +526,7 @@ class SessionStatusResponse(BaseModel):
 
 @app.post("/api/v1/join", response_model=JoinResponse)
 def join(req: JoinRequest) -> JoinResponse:
-    # 客户端注册（ClientManagerAgent 职责）
+    # 客户端注册（ClientManagerModule 职责）
     client_id, reused = CLIENT_MANAGER.register(req.client_name)
     COORDINATOR.register_client(client_id)
     if reused:
@@ -549,7 +557,7 @@ def heartbeat(req: HeartbeatRequest) -> HeartbeatResponse:
 
 @app.get("/dashboard")
 def dashboard() -> FileResponse:
-    # Dashboard 页面（WebDashboardAgent）
+    # Dashboard 页面（WebDashboardModule）
     return FileResponse(str(WEB_DIR / "dashboard.html"))
 
 
@@ -601,6 +609,7 @@ def session_status() -> SessionStatusResponse:
     # 返回当前训练会话状态
     return SessionStatusResponse(
         running=RUNNER.is_running(),
+        status=RUNNER.status(),
         config_path=SESSION_STATE.get("config_path"),
         runtime_config_path=SESSION_STATE.get("runtime_config_path"),
         params=SESSION_STATE.get("params", {}),
@@ -696,7 +705,7 @@ def clients_unblacklist(req: ClientActionRequest) -> ClientActionResponse:
 
 @app.post("/api/v1/get_model", response_model=GetModelResponse)
 def get_model(req: GetModelRequest) -> GetModelResponse:
-    # 下发模型参数 + 轮次配置（CoordinatorAgent 输出）
+    # 下发模型参数 + 轮次配置（CoordinatorModule 输出）
     if not CLIENT_MANAGER.is_registered(req.client_id):
         raise HTTPException(status_code=404, detail="client not found")
     # 任何有效请求都视为在线活跃

@@ -4,11 +4,11 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 
-# ClientManagerAgent（AGENT.md 3.1.B）：
+# ClientManagerModule（AGENT.md 3.1.B）：
 # - 注册与心跳
 # - 在线/可参与资格维护
 # - 拉黑管理（恶意检测 + 手动管理）
-class ClientManagerAgent:
+class ClientManagerModule:
     def __init__(self, online_ttl_sec: float = 60.0) -> None:
         self._clients: Dict[str, Dict[str, object]] = {}
         self._blacklist: Dict[str, Dict[str, object]] = {}

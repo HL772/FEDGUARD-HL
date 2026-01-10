@@ -11,7 +11,7 @@ class ApiError(RuntimeError):
 
 
 def _request_json(method: str, url: str, payload: Dict[str, Any], timeout: float) -> Dict[str, Any]:
-    # 统一的 JSON 请求封装（CommAgent）
+    # 统一的 JSON 请求封装（CommModule）
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")

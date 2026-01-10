@@ -1,6 +1,6 @@
 import unittest
 
-from server.orchestrator import CoordinatorAgent
+from server.orchestrator import CoordinatorModule
 from server.privacy.accountant import RDPAccountant
 
 
@@ -32,7 +32,7 @@ class TestAdaptiveClip(unittest.TestCase):
             "clip_norm": 2.0,
             "adaptive_clip": {"enabled": True, "percentile": 0.5, "ema": 0.5},
         }
-        coordinator = CoordinatorAgent(
+        coordinator = CoordinatorModule(
             max_rounds=1,
             clients_per_round=1,
             dp_config=dp_config,

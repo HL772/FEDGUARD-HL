@@ -4,7 +4,7 @@ import torch
 
 from client.compression.quant import dequantize, quantize
 
-# CompressionAgent（AGENT.md 3.2.K）：Top-K 稀疏 + 量化 + 误差反馈
+# CompressionModule（AGENT.md 3.2.K）：Top-K 稀疏 + 量化 + 误差反馈
 
 
 def compress_state(delta_state: Dict[str, list], topk_ratio: float, quant_bits: int) -> Dict[str, Any]:
@@ -63,7 +63,7 @@ def decompress_state(payload: Dict[str, Any]) -> Dict[str, list]:
     return state
 
 
-class CompressionAgent:
+class CompressionModule:
     def __init__(self, topk_ratio: float, quant_bits: int) -> None:
         self.topk_ratio = topk_ratio
         self.quant_bits = quant_bits

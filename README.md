@@ -17,6 +17,7 @@
 - 攻击模拟与检测统计（scale/label‑flip，P/R/F1）
 - 性能监控（REST + WebSocket Dashboard）
 - 客户端管理（在线列表、手动拉黑/解除、超时展示）
+- Web 启动配置（Dashboard 直接配置参数并启动训练）
 
 暂未做（按需求可扩展）：
 - sqlite 指标持久化（当前为 JSONL）
@@ -29,18 +30,19 @@ FedGuard/
   README.md
   server/
     app.py                  # FastAPI 入口：API + /dashboard + WS
-    orchestrator.py         # CoordinatorAgent（轮次调度、聚合触发、指标）
-    client_manager.py       # ClientManagerAgent（注册/心跳/拉黑/在线）
+    orchestrator.py         # CoordinatorModule（轮次调度、聚合触发、指标）
+    client_manager.py       # ClientManagerModule（注册/心跳/拉黑/在线）
+    launcher.py             # Web 启动器（Dashboard 启动客户端进程）
     aggregation/
-      fedavg.py             # AggregationAgent + FedAvg/FedProx
+      fedavg.py             # AggregationModule + FedAvg/FedProx
       robust.py             # trimmed_mean / median
-      secure_agg.py         # SecureAggregationAgent
+      secure_agg.py         # SecureAggregationModule
     privacy/
       accountant.py         # RDP Accountant（ε 统计）
     security/
       malicious_detect.py   # 恶意检测
     metrics/
-      store.py              # MetricsAgent（JSONL + WS 推送）
+      store.py              # MetricsModule（JSONL + WS 推送）
       schema.py             # metrics schema 归一化
       metrics.jsonl         # 训练指标记录（启动会清空）
     web/
@@ -49,15 +51,15 @@ FedGuard/
       dashboard.css         # Dashboard 样式
   client/
     main.py                 # Client 进程入口
-    data/partition.py       # DataAgent（Dirichlet 非 IID）
-    train/local_trainer.py  # LocalTrainerAgent（FedAvg/FedProx）
-    privacy/dp.py           # DifferentialPrivacyAgent
+    data/partition.py       # DataModule（Dirichlet 非 IID）
+    train/local_trainer.py  # LocalTrainerModule（FedAvg/FedProx）
+    privacy/dp.py           # DifferentialPrivacyModule
     compression/
       topk.py               # Top‑K + 量化
       quant.py
       error_feedback.py     # 误差反馈（EF）
-    secure/mask.py          # SecureMaskingAgent
-    comm/api_client.py      # CommAgent（HTTP 客户端）
+    secure/mask.py          # SecureMaskingModule
+    comm/api_client.py      # CommModule（HTTP 客户端）
   experiments/
     configs/
       default.yaml          # 默认全量配置
@@ -80,19 +82,25 @@ FedGuard/
 
 ## 快速启动
 
-1) 启动演示（示例：6 客户端、每轮 6 个、每批 2 个、10 轮）
+1) 命令行启动演示（示例：6 客户端、每轮 6 个、每批 2 个、10 轮）
 ```bash
-ONLINE_TTL_SEC=60 MAX_ROUNDS=10 NUM_CLIENTS=6 CLIENTS_PER_ROUND=6 CLIENT_BATCH_SIZE=2 \
+ONLINE_TTL_SEC=600 MAX_ROUNDS=10 NUM_CLIENTS=6 CLIENTS_PER_ROUND=6 CLIENT_BATCH_SIZE=2 \
 python experiments/scripts/run_local_demo.py
 ```
 
-2) 打开 Dashboard  
+2) Web 启动（推荐）  
+```bash
+python server/app.py
+```
+打开 Dashboard：`http://127.0.0.1:8000/dashboard` → “启动配置” → 启动。
+
+3) 打开 Dashboard（命令行启动场景）  
 `http://127.0.0.1:8000/dashboard`
 
-3) 指定配置文件运行（示例：best.yaml）
+4) 指定配置文件运行（示例：best.yaml）
 ```bash
 CONFIG_PATH=experiments/configs/best.yaml \
-ONLINE_TTL_SEC=60 MAX_ROUNDS=10 NUM_CLIENTS=6 CLIENTS_PER_ROUND=6 CLIENT_BATCH_SIZE=2 \
+ONLINE_TTL_SEC=600 MAX_ROUNDS=10 NUM_CLIENTS=6 CLIENTS_PER_ROUND=6 CLIENT_BATCH_SIZE=2 \
 python experiments/scripts/run_local_demo.py
 ```
 
@@ -123,8 +131,8 @@ python experiments/scripts/run_ablation.py
 ### 顶部概览卡片
 - 轮次、K/N、轮次耗时
 - DP 模式、聚合算法、采样模式
-- ε 最大值、上传 KB、压缩比
-- 拉黑数量（全局）
+- ε 最大值、上传总量、压缩比
+- 拉黑数、超时数（全局）
 
 ### 客户端指标页
 - 损失曲线 / 准确率曲线（客户端训练统计）
@@ -134,7 +142,7 @@ python experiments/scripts/run_ablation.py
 - 客户端更新表（支持轮次切换；含状态、ε、标签分布）
 
 ### 客户端管理页
-- 在线客户端列表（状态颜色：在线=绿、超时=黄、已拉黑=红）
+- 在线客户端列表（状态颜色：在线=绿、超时=黄、离线=灰、已拉黑=红）
 - 客户端管理表：可手动拉黑/解除
 - 告警日志（包含轮次、时间、原因、动作）
 
@@ -150,7 +158,7 @@ python experiments/scripts/run_ablation.py
 - `compressed_ratio`：`raw_bytes / compressed_bytes`，越大表示压缩越明显。
 - `server.update_norm`：本轮聚合后的更新向量 L2 范数。
 - 相似度排名：客户端与参考更新方向的 cosine 分数做中位数/MAD 标准化后得到 z‑score。
-- 通信负载（上传 KB）：`upload_bytes_total / 1024`。
+- 通信负载（上传总量）：`upload_bytes_total / 1024`。
 - ε 曲线：`epsilon_max` / `epsilon_avg` 来自客户端上报；`epsilon_accountant` 来自服务器 RDP 会计。
 
 ### 操作提示
@@ -236,7 +244,7 @@ sampling:
 - `NUM_CLIENTS`：客户端总数
 - `CLIENTS_PER_ROUND`：每轮参与的客户端数（K）
 - `CLIENT_BATCH_SIZE`：分批并发运行的客户端数量
-- `ONLINE_TTL_SEC`：在线心跳窗口（秒）
+- `ONLINE_TTL_SEC`：在线心跳窗口（秒，默认 600）
 - `CONFIG_PATH`：指定配置文件路径
 
 ## 说明与注意
@@ -246,3 +254,4 @@ sampling:
 - Client Metrics 曲线是“本地训练统计”；Server Aggregation 曲线是“统一测试集评估”，两者趋势可能不同。
 - 使用 FedPer 时，将 `train.algo` 设置为 `fedper`，仅聚合 `backbone_keys`，`head_keys` 保持客户端私有。
 - 使用 FedPer 双头版本时，将 `train.algo` 设置为 `fedper_dual`，聚合 `backbone_keys` + `head_keys`，`private_head_keys` 保持客户端私有。
+- 超时模拟支持 `train.timeout_simulation.client_ranks`（0-based，对应 client-1 为 0）。

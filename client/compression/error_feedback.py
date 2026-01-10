@@ -5,7 +5,7 @@ import torch
 # 误差反馈（EF）：压缩残差累积，下一轮补偿
 
 
-class ErrorFeedbackAgent:
+class ErrorFeedbackModule:
     def __init__(self) -> None:
         self._residual_state: Dict[str, list] = {}
 

@@ -46,7 +46,7 @@ def _spawn_process(cmd, cwd, name, extra_env=None):
     env["PYTHONUNBUFFERED"] = "1"
     if extra_env:
         env.update(extra_env)
-    proc = subprocess.Popen(cmd, cwd=cwd, env=env)
+    proc = subprocess.Popen(cmd, cwd=cwd, env=env) # 真实进程启动
     print(f"[demo] started {name} pid={proc.pid}", flush=True)
     return proc
 

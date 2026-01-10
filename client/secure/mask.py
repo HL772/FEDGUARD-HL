@@ -4,7 +4,7 @@ from typing import Dict, List
 import numpy as np
 import torch
 
-# SecureMaskingAgent（AGENT.md 3.2.L）：pairwise 掩码模拟
+# SecureMaskingModule（AGENT.md 3.2.L）：pairwise 掩码模拟
 
 
 def _pair_seed(round_id: int, client_id: str, peer_id: str, param_name: str) -> int:
@@ -25,7 +25,7 @@ def _mask_for_pair(
     return torch.tensor(mask, dtype=torch.float32)
 
 
-class SecureMaskingAgent:
+class SecureMaskingModule:
     def __init__(self, mask_scale: float = 1.0) -> None:
         self.mask_scale = mask_scale
 
