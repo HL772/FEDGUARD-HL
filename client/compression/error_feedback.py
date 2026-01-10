@@ -2,12 +2,15 @@ from typing import Dict
 
 import torch
 
+# 误差反馈（EF）：压缩残差累积，下一轮补偿
+
 
 class ErrorFeedbackAgent:
     def __init__(self) -> None:
         self._residual_state: Dict[str, list] = {}
 
     def apply(self, delta_state: Dict[str, list]) -> Dict[str, list]:
+        # 将上一轮残差加回当前更新
         combined: Dict[str, list] = {}
         for key, value in delta_state.items():
             delta_tensor = torch.tensor(value, dtype=torch.float32)
@@ -19,6 +22,7 @@ class ErrorFeedbackAgent:
         return combined
 
     def update(self, combined_state: Dict[str, list], reconstructed_state: Dict[str, list]) -> None:
+        # 更新残差（原始 - 重建）
         new_residual: Dict[str, list] = {}
         for key, value in combined_state.items():
             combined_tensor = torch.tensor(value, dtype=torch.float32)

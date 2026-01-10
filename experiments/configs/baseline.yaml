@@ -1,4 +1,5 @@
-dp:
+# 基线配置（用于对照实验）
+dp:  # 差分隐私（静态）
   enabled: true
   mode: static
   accountant: rdp
@@ -14,13 +15,13 @@ dp:
     percentile: 0.9
     ema: 0.2
 
-compression:
+compression:  # 压缩（Top-K + 量化 + EF）
   enabled: true
   topk_ratio: 0.8
   quant_bits: 16
   error_feedback: true
 
-security:
+security:  # 安全聚合 + 恶意检测
   secure_aggregation: true
   mask_scale: 1.0
   malicious_detection: true
@@ -43,20 +44,20 @@ security:
     malicious_ranks: []
     label_flip: false
 
-train:
+train:  # 训练配置
   algo: fedavg
   fedprox_mu: 0.01
   deadline_ms: 60000
   lr: 0.02
   epochs: 2
 
-data:
+data:  # 非 IID 数据
   alpha: 0.2
 
-sampling:
+sampling:  # 采样关闭（基线）
   enabled: false
 
-model:
+model:  # 模型切分（FedPer 兼容）
   split:
     backbone_keys:
       - backbone.*

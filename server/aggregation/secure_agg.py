@@ -4,6 +4,7 @@ import torch
 
 
 class SecureAggregationAgent:
+    # 安全聚合：对掩码更新求和，掩码在求和后抵消
     def aggregate(self, masked_updates: List[Dict[str, list]]) -> Dict[str, list]:
         if not masked_updates:
             raise ValueError("No masked updates to aggregate")

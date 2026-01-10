@@ -2,8 +2,11 @@ from typing import Dict, List, Tuple
 
 import torch
 
+# 鲁棒聚合工具（AGENT.md 3.1.C）：用于抵抗异常/恶意更新
+
 
 def median_aggregate(states: List[Dict[str, list]]) -> Dict[str, list]:
+    # 坐标维度逐点取中位数
     if not states:
         raise ValueError("No states to aggregate")
     result: Dict[str, list] = {}
@@ -16,6 +19,7 @@ def median_aggregate(states: List[Dict[str, list]]) -> Dict[str, list]:
 
 
 def trimmed_mean_aggregate(states: List[Dict[str, list]], trim_ratio: float) -> Dict[str, list]:
+    # 对每个坐标去掉极值后取均值
     if not states:
         raise ValueError("No states to aggregate")
     if trim_ratio < 0 or trim_ratio >= 0.5:
@@ -37,6 +41,7 @@ def trimmed_mean_aggregate(states: List[Dict[str, list]], trim_ratio: float) -> 
 
 
 def _flatten_state(state: Dict[str, list], keys: List[str]) -> torch.Tensor:
+    # 展平成向量用于距离评分
     tensors = [torch.tensor(state[key], dtype=torch.float32).reshape(-1) for key in keys]
     if not tensors:
         return torch.zeros(1, dtype=torch.float32)
@@ -44,11 +49,13 @@ def _flatten_state(state: Dict[str, list], keys: List[str]) -> torch.Tensor:
 
 
 def _pairwise_distances(vectors: List[torch.Tensor]) -> torch.Tensor:
+    # 计算两两欧氏距离（Krum 选择使用）
     stacked = torch.stack(vectors, dim=0)
     return torch.cdist(stacked, stacked, p=2)
 
 
 def krum_aggregate(states: List[Dict[str, list]], byzantine_f: int = 1) -> Dict[str, list]:
+    # Krum：选择与其他更新最接近的一个更新
     if not states:
         raise ValueError("No states to aggregate")
     n = len(states)
@@ -69,6 +76,7 @@ def krum_aggregate(states: List[Dict[str, list]], byzantine_f: int = 1) -> Dict[
 
 
 def bulyan_aggregate(states: List[Dict[str, list]], byzantine_f: int = 1) -> Dict[str, list]:
+    # Bulyan：迭代 Krum 选出候选，再做 trimmed mean
     if not states:
         raise ValueError("No states to aggregate")
     n = len(states)

@@ -70,12 +70,18 @@
       </div>
 
       <div class="tabs">
+        <!-- 客户端侧指标展示 -->
         <button class="tab active" data-target="client-panel">客户端指标</button>
+        <!-- 启动配置与参数选择 -->
+        <button class="tab" data-target="launch-panel">启动配置</button>
+        <!-- 客户端在线/拉黑管理 -->
         <button class="tab" data-target="client-manage-panel">客户端管理</button>
+        <!-- 服务端聚合与安全摘要 -->
         <button class="tab" data-target="server-panel">服务端聚合</button>
       </div>
 
       <section id="client-panel" class="panel active">
+        <!-- 客户端训练与通信指标 -->
         <div class="grid">
           <div class="card chart-card">
             <h2>损失曲线</h2>
@@ -130,6 +136,7 @@
       </section>
 
       <section id="client-manage-panel" class="panel">
+        <!-- 客户端管理与告警 -->
         <div class="card online-card">
           <h2>在线客户端</h2>
           <ul id="client-list" class="client-list compact"></ul>
@@ -168,7 +175,386 @@
         </div>
       </section>
 
+      <section id="launch-panel" class="panel">
+        <!-- 启动配置与参数选择 -->
+        <div class="card">
+          <div class="card-header">
+            <h2>启动控制</h2>
+            <div class="pager">
+              <button id="launch-start" type="button">启动</button>
+              <button id="launch-stop" type="button">停止</button>
+            </div>
+          </div>
+          <div id="launch-status" class="status-text">状态：未启动</div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <h2>运行规模</h2>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="launch-num-clients">客户端数量</label>
+                <input id="launch-num-clients" type="number" min="1" value="14" />
+              </div>
+              <div class="form-field">
+                <label for="launch-clients-per-round">每轮参与数</label>
+                <input id="launch-clients-per-round" type="number" min="1" value="8" />
+              </div>
+              <div class="form-field">
+                <label for="launch-client-batch">并发批次</label>
+                <input id="launch-client-batch" type="number" min="1" value="14" />
+              </div>
+              <div class="form-field">
+                <label for="launch-max-rounds">最大轮数</label>
+                <input id="launch-max-rounds" type="number" min="1" value="20" />
+              </div>
+              <div class="form-field">
+                <label for="launch-online-ttl">在线 TTL（秒）</label>
+                <input id="launch-online-ttl" type="number" min="1" value="600" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-download-data" type="checkbox" />
+                  下载数据
+                </label>
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-stay-online" type="checkbox" />
+                  未入选保持在线
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>训练参数</h2>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="launch-train-algo">训练算法</label>
+                <select id="launch-train-algo">
+                  <option value="fedavg">fedavg</option>
+                  <option value="fedprox">fedprox</option>
+                  <option value="fedper">fedper</option>
+                  <option value="fedper_dual">fedper_dual</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-train-lr">学习率</label>
+                <input id="launch-train-lr" type="number" step="0.0001" />
+              </div>
+              <div class="form-field">
+                <label for="launch-train-epochs">本地轮数</label>
+                <input id="launch-train-epochs" type="number" min="1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-fedprox-mu">FedProx μ</label>
+                <input id="launch-fedprox-mu" type="number" step="0.0001" />
+              </div>
+              <div class="form-field">
+                <label for="launch-deadline-ms">超时阈值(ms)</label>
+                <input id="launch-deadline-ms" type="number" min="0" />
+              </div>
+              <div class="form-field">
+                <label for="launch-server-lr">服务端学习率</label>
+                <input id="launch-server-lr" type="number" step="0.0001" />
+              </div>
+              <div class="form-field">
+                <label for="launch-server-clip">服务端裁剪阈值</label>
+                <input id="launch-server-clip" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-private-head-lr">私有 Head LR</label>
+                <input id="launch-private-head-lr" type="number" step="0.0001" />
+              </div>
+              <div class="form-field">
+                <label for="launch-private-head-epochs">私有 Head 轮数</label>
+                <input id="launch-private-head-epochs" type="number" min="1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>数据与采样</h2>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="launch-data-alpha">Dirichlet α</label>
+                <input id="launch-data-alpha" type="number" step="0.01" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-sampling-enabled" type="checkbox" />
+                  启用采样
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-strategy">采样策略</label>
+                <select id="launch-sampling-strategy">
+                  <option value="random">random</option>
+                  <option value="score">score</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-epsilon">采样 ε</label>
+                <input id="launch-sampling-epsilon" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-ema">评分 EMA</label>
+                <input id="launch-sampling-ema" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-timeout-penalty">超时惩罚</label>
+                <input id="launch-sampling-timeout-penalty" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-anomaly-penalty">异常惩罚</label>
+                <input id="launch-sampling-anomaly-penalty" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-fairness">公平窗口</label>
+                <input id="launch-sampling-fairness" type="number" min="0" />
+              </div>
+              <div class="form-field">
+                <label for="launch-sampling-softmax">Softmax 温度</label>
+                <input id="launch-sampling-softmax" type="number" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>差分隐私</h2>
+            <div class="form-grid">
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-dp-enabled" type="checkbox" />
+                  启用 DP
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-mode">DP 模式</label>
+                <select id="launch-dp-mode">
+                  <option value="adaptive_rdp">adaptive_rdp</option>
+                  <option value="static">static</option>
+                  <option value="off">off</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-clip">裁剪阈值</label>
+                <input id="launch-dp-clip" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-noise">噪声乘子</label>
+                <input id="launch-dp-noise" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-delta">δ</label>
+                <input id="launch-dp-delta" type="number" step="0.000001" />
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-target">目标 ε</label>
+                <input id="launch-dp-target" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-schedule">噪声衰减</label>
+                <select id="launch-dp-schedule">
+                  <option value="">无</option>
+                  <option value="linear">linear</option>
+                  <option value="exp">exp</option>
+                  <option value="cosine_decay">cosine_decay</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-sigma-ratio">衰减比例</label>
+                <input id="launch-dp-sigma-ratio" type="number" step="0.01" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-dp-adaptive" type="checkbox" />
+                  自适应裁剪
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-percentile">裁剪分位</label>
+                <input id="launch-dp-percentile" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-dp-ema">裁剪 EMA</label>
+                <input id="launch-dp-ema" type="number" step="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>模型压缩</h2>
+            <div class="form-grid">
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-compression-enabled" type="checkbox" />
+                  启用压缩
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-topk-ratio">Top-K 比例</label>
+                <input id="launch-topk-ratio" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-quant-bits">量化位数</label>
+                <select id="launch-quant-bits">
+                  <option value="8">8</option>
+                  <option value="16">16</option>
+                </select>
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-error-feedback" type="checkbox" />
+                  误差反馈
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>安全与检测</h2>
+            <div class="form-grid">
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-secure-agg" type="checkbox" />
+                  安全聚合
+                </label>
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-malicious-detect" type="checkbox" />
+                  恶意检测
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-robust-method">鲁棒聚合</label>
+                <select id="launch-robust-method">
+                  <option value="fedavg">fedavg</option>
+                  <option value="trimmed_mean">trimmed_mean</option>
+                  <option value="median">median</option>
+                  <option value="krum">krum</option>
+                  <option value="bulyan">bulyan</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-trim-ratio">Trim 比例</label>
+                <input id="launch-trim-ratio" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-byzantine-f">Byzantine f</label>
+                <input id="launch-byzantine-f" type="number" min="0" />
+              </div>
+              <div class="form-field">
+                <label for="launch-loss-threshold">Loss 阈值</label>
+                <input id="launch-loss-threshold" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-norm-threshold">Norm 阈值</label>
+                <input id="launch-norm-threshold" type="number" step="0.1" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-require-both" type="checkbox" />
+                  需同时异常
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-min-mad">最小 MAD</label>
+                <input id="launch-min-mad" type="number" step="0.01" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-cosine-enabled" type="checkbox" />
+                  余弦检测
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-cosine-threshold">余弦阈值</label>
+                <input id="launch-cosine-threshold" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-cosine-topk">余弦 Top-K</label>
+                <input id="launch-cosine-topk" type="number" min="0" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>攻击模拟</h2>
+            <div class="form-grid">
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-attack-enabled" type="checkbox" />
+                  启用攻击
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-method">攻击方式</label>
+                <select id="launch-attack-method">
+                  <option value="scale">scale</option>
+                  <option value="sign_flip">sign_flip</option>
+                  <option value="label_flip">label_flip</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-scale">攻击比例</label>
+                <input id="launch-attack-scale" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-fraction">恶意比例</label>
+                <input id="launch-attack-fraction" type="number" step="0.01" />
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-ranks">恶意 ranks</label>
+                <input id="launch-attack-ranks" type="text" placeholder="0,1" />
+              </div>
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-attack-label-flip" type="checkbox" />
+                  标签翻转
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-loss-scale">损失放大</label>
+                <input id="launch-attack-loss-scale" type="number" step="0.1" />
+              </div>
+              <div class="form-field">
+                <label for="launch-attack-acc-scale">准确率缩放</label>
+                <input id="launch-attack-acc-scale" type="number" step="0.1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>超时模拟</h2>
+            <div class="form-grid">
+              <div class="form-field form-toggle">
+                <label>
+                  <input id="launch-timeout-enabled" type="checkbox" />
+                  启用超时模拟
+                </label>
+              </div>
+              <div class="form-field">
+                <label for="launch-timeout-ranks">客户端 ranks</label>
+                <input
+                  id="launch-timeout-ranks"
+                  type="text"
+                  placeholder="例如 0,2（对应 client-1、client-3）"
+                />
+              </div>
+              <div class="form-field">
+                <label for="launch-timeout-cooldown">冷却轮数</label>
+                <input id="launch-timeout-cooldown" type="number" min="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="server-panel" class="panel">
+        <!-- 服务端评估与安全检测摘要 -->
         <div class="grid">
           <div class="card chart-card">
             <h2>服务端评估损失</h2>

@@ -4,8 +4,11 @@ from typing import Dict, List
 import numpy as np
 import torch
 
+# SecureMaskingAgent（AGENT.md 3.2.L）：pairwise 掩码模拟
+
 
 def _pair_seed(round_id: int, client_id: str, peer_id: str, param_name: str) -> int:
+    # 为每对客户端 + 参数生成稳定随机种子
     first, second = sorted([client_id, peer_id])
     raw = f"{round_id}:{first}:{second}:{param_name}".encode("utf-8")
     digest = hashlib.sha256(raw).digest()
@@ -15,6 +18,7 @@ def _pair_seed(round_id: int, client_id: str, peer_id: str, param_name: str) -> 
 def _mask_for_pair(
     shape: torch.Size, round_id: int, client_id: str, peer_id: str, param_name: str, scale: float
 ) -> torch.Tensor:
+    # 生成某一对客户端的掩码向量
     seed = _pair_seed(round_id, client_id, peer_id, param_name)
     rng = np.random.default_rng(seed)
     mask = rng.normal(loc=0.0, scale=scale, size=tuple(shape))
@@ -32,6 +36,7 @@ class SecureMaskingAgent:
         client_id: str,
         round_id: int,
     ) -> Dict[str, list]:
+        # 对更新做 pairwise 掩码，保证服务端只见聚合和
         masked: Dict[str, list] = {}
         for name, values in delta_state.items():
             tensor = torch.tensor(values, dtype=torch.float32)

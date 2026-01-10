@@ -5,6 +5,7 @@ from torch import nn
 
 
 class FedPerModel(nn.Module):
+    # 客户端训练模型：backbone + head + private_head（FedPer / FedPer-dual）
     def __init__(self) -> None:
         super().__init__()
         self.backbone = nn.Sequential(
@@ -21,19 +22,23 @@ class FedPerModel(nn.Module):
 
 
 def create_model() -> nn.Module:
+    # 统一模型工厂（与服务端结构一致）
     return FedPerModel()
 
 
 def load_state_dict_from_list(model: nn.Module, state_list: Dict[str, list]) -> None:
+    # 从 list 状态恢复模型参数
     tensor_state = {k: torch.tensor(v, dtype=torch.float32) for k, v in state_list.items()}
     model.load_state_dict(tensor_state)
 
 
 def state_dict_to_list(model: nn.Module) -> Dict[str, list]:
+    # 将模型参数转成 list 便于序列化
     return {k: v.detach().cpu().tolist() for k, v in model.state_dict().items()}
 
 
 def update_state_dict_from_list(model: nn.Module, state_list: Dict[str, list]) -> None:
+    # 仅更新部分参数（用于保留私有 head）
     current_state = model.state_dict()
     for key, value in state_list.items():
         if key in current_state:
@@ -42,6 +47,7 @@ def update_state_dict_from_list(model: nn.Module, state_list: Dict[str, list]) -
 
 
 def extract_state_by_keys(model: nn.Module, keys: set[str]) -> Dict[str, list]:
+    # 按 key 选择需要上传/保留的参数子集
     extracted: Dict[str, list] = {}
     for key, value in model.state_dict().items():
         if key in keys:
@@ -59,6 +65,7 @@ def train_one_epoch(
     label_flip: bool = False,
     num_classes: int = 10,
 ) -> Tuple[float, int, int, float]:
+    # LocalTrainerAgent（AGENT.md 3.2.I）：FedAvg/FedProx 单轮训练
     model.to(device)
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
@@ -77,6 +84,7 @@ def train_one_epoch(
         logits = model(batch_x)
         loss = criterion(logits, batch_y)
         if mu > 0 and global_params is not None:
+            # FedProx 正则项：缓解非 IID 漂移
             prox_term = 0.0
             for param, global_param in zip(model.parameters(), global_params):
                 prox_term += torch.sum((param - global_param) ** 2)
@@ -106,6 +114,7 @@ def train_one_epoch_dual(
     label_flip: bool = False,
     num_classes: int = 10,
 ) -> Tuple[float, int, int, float]:
+    # FedPer-dual：共享 head + 私有 head 分阶段训练
     model.to(device)
     model.train()
     shared_params = list(model.backbone.parameters()) + list(model.head.parameters())

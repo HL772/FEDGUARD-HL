@@ -2,6 +2,7 @@ import math
 from typing import List
 
 
+# RDP 会计（AGENT.md 3.2.J）：累计 DP ε 预算
 class RDPAccountant:
     def __init__(self, orders: List[float] | None = None) -> None:
         if orders is None:
@@ -14,12 +15,14 @@ class RDPAccountant:
         return list(self._orders)
 
     def update(self, sample_rate: float, noise_multiplier: float, steps: int = 1) -> None:
+        # 更新 RDP 预算
         if sample_rate <= 0 or noise_multiplier <= 0 or steps <= 0:
             return
         for idx, order in enumerate(self._orders):
             self._rdp[idx] += steps * _approx_rdp(order, sample_rate, noise_multiplier)
 
     def get_epsilon(self, delta: float) -> float:
+        # 将 RDP 转换为 (ε, δ)-DP
         if delta <= 0:
             return 0.0
         eps_values = []
@@ -32,6 +35,7 @@ class RDPAccountant:
 
 
 def _approx_rdp(order: float, sample_rate: float, noise_multiplier: float) -> float:
+    # 子采样高斯机制的 RDP 近似
     sigma_sq = noise_multiplier ** 2
     if sample_rate >= 1.0:
         return float(order) / (2.0 * sigma_sq)

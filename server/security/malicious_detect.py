@@ -3,8 +3,13 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
+# MaliciousDetectionAgent（AGENT.md 3.1.E）：
+# - 基于 loss/norm 的 MAD 异常检测
+# - 可选的余弦相似度异常检测
+
 
 def _state_norm(delta_state: Dict[str, list]) -> float:
+    # 计算状态 L2 范数
     total = 0.0
     for value in delta_state.values():
         tensor = torch.tensor(value, dtype=torch.float32)
@@ -13,6 +18,7 @@ def _state_norm(delta_state: Dict[str, list]) -> float:
 
 
 def _median(values: List[float]) -> float:
+    # 中位数（鲁棒统计）
     if not values:
         return 0.0
     sorted_vals = sorted(values)
@@ -23,6 +29,7 @@ def _median(values: List[float]) -> float:
 
 
 def _mad(values: List[float], median: float) -> float:
+    # MAD（中位数绝对偏差）
     if not values:
         return 0.0
     deviations = [abs(v - median) for v in values]
@@ -30,6 +37,7 @@ def _mad(values: List[float], median: float) -> float:
 
 
 def _flatten_state(state: Dict[str, list], keys: List[str]) -> torch.Tensor:
+    # 展平成向量用于余弦相似度计算
     if not keys:
         return torch.zeros(1, dtype=torch.float32)
     tensors = [torch.tensor(state[key], dtype=torch.float32).reshape(-1) for key in keys]
@@ -37,6 +45,7 @@ def _flatten_state(state: Dict[str, list], keys: List[str]) -> torch.Tensor:
 
 
 def _cosine_similarity(vec: torch.Tensor, mean_vec: torch.Tensor) -> float:
+    # 计算与均值向量的余弦相似度
     denom = torch.norm(vec) * torch.norm(mean_vec)
     if denom.item() == 0.0:
         return 0.0
@@ -44,6 +53,7 @@ def _cosine_similarity(vec: torch.Tensor, mean_vec: torch.Tensor) -> float:
 
 
 class MaliciousDetectionAgent:
+    # 恶意检测：输出异常客户端列表与诊断信息
     def __init__(
         self,
         loss_threshold: float = 3.0,
@@ -63,6 +73,7 @@ class MaliciousDetectionAgent:
         self.cosine_top_k = cosine_top_k
 
     def detect(self, updates: List[Dict[str, object]]) -> Dict[str, object]:
+        # 计算鲁棒得分并基于阈值标记异常
         losses: List[float] = []
         norms: List[float] = []
         reported_scores: Dict[str, float] = {}

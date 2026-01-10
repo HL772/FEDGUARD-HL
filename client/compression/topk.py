@@ -4,8 +4,11 @@ import torch
 
 from client.compression.quant import dequantize, quantize
 
+# CompressionAgent（AGENT.md 3.2.K）：Top-K 稀疏 + 量化 + 误差反馈
+
 
 def compress_state(delta_state: Dict[str, list], topk_ratio: float, quant_bits: int) -> Dict[str, Any]:
+    # 对每个参数张量执行 Top-K + 量化
     if topk_ratio <= 0 or topk_ratio > 1:
         raise ValueError("topk_ratio must be in (0, 1]")
     payload: Dict[str, Any] = {
@@ -42,6 +45,7 @@ def compress_state(delta_state: Dict[str, list], topk_ratio: float, quant_bits: 
 
 
 def decompress_state(payload: Dict[str, Any]) -> Dict[str, list]:
+    # 解压 Top-K + 量化结果
     if payload.get("method") != "topk_quant":
         raise ValueError("unsupported compression method")
     params = payload.get("params", {})
@@ -65,7 +69,9 @@ class CompressionAgent:
         self.quant_bits = quant_bits
 
     def compress(self, delta_state: Dict[str, list]) -> Dict[str, Any]:
+        # 压缩入口
         return compress_state(delta_state, self.topk_ratio, self.quant_bits)
 
     def decompress(self, payload: Dict[str, Any]) -> Dict[str, list]:
+        # 解压入口
         return decompress_state(payload)

@@ -1,4 +1,5 @@
-dp:
+# FedPer 方案配置
+dp:  # 差分隐私
   enabled: true
   mode: adaptive_rdp
   accountant: rdp
@@ -14,13 +15,13 @@ dp:
     percentile: 0.95
     ema: 0.2
 
-compression:
+compression:  # 压缩
   enabled: true
   topk_ratio: 0.8
   quant_bits: 16
   error_feedback: true
 
-security:
+security:  # 安全与检测
   secure_aggregation: true
   mask_scale: 1.0
   malicious_detection: true
@@ -43,7 +44,7 @@ security:
     malicious_ranks: []
     label_flip: false
 
-train:
+train:  # 训练配置（FedPer-dual）
   algo: fedper_dual
   fedprox_mu: 0.01
   deadline_ms: 60000
@@ -52,7 +53,7 @@ train:
   lr: 0.02
   epochs: 2
 
-model:
+model:  # FedPer 模型切分
   split:
     backbone_keys:
       - backbone.*
@@ -68,10 +69,10 @@ model:
     max_batches: 4
     lr: 0.1
 
-data:
+data:  # 非 IID 数据
   alpha: 0.2
 
-sampling:
+sampling:  # 采样策略
   enabled: true
   strategy: score
   epsilon: 0.1

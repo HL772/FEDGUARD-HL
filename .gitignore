@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+data/MNIST/
+*.gz
+*.ubyte
+experiments/runtime/
+*.pid
+*.log
+output.txt
+experiments/results/
+*.jsonl

@@ -11,11 +11,14 @@ class ApiError(RuntimeError):
 
 
 def _request_json(method: str, url: str, payload: Dict[str, Any], timeout: float) -> Dict[str, Any]:
+    # 统一的 JSON 请求封装（CommAgent）
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # 本地回环通信，显式禁用代理，避免被系统代理拦截导致 502
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8") if exc.fp else str(exc)
@@ -35,6 +38,7 @@ class ApiClient:
         self.timeout = timeout
 
     def join(self, client_name: Optional[str] = None) -> str:
+        # 注册客户端
         payload: Dict[str, Any] = {}
         if client_name:
             payload["client_name"] = client_name
@@ -42,10 +46,12 @@ class ApiClient:
         return str(resp["client_id"])
 
     def heartbeat(self, client_id: str) -> Dict[str, Any]:
+        # 心跳上报
         payload = {"client_id": client_id, "timestamp": time.time()}
         return _request_json("POST", f"{self.base_url}/api/v1/heartbeat", payload, self.timeout)
 
     def get_model(self, client_id: str) -> Dict[str, Any]:
+        # 拉取当前轮模型与配置
         payload = {"client_id": client_id}
         return _request_json("POST", f"{self.base_url}/api/v1/get_model", payload, self.timeout)
 
@@ -75,6 +81,7 @@ class ApiClient:
         clip_applied: Optional[bool] = None,
         attack_type: Optional[str] = None,
     ) -> Dict[str, Any]:
+        # 上传本地更新及统计信息
         payload = {
             "client_id": client_id,
             "round_id": round_id,

@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 
+# 指标归一化（AGENT.md 5.x）：保证 Dashboard 结构稳定
+
 
 def _as_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -16,6 +18,7 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 
 def normalize_round_metric(metric: Dict[str, Any]) -> Dict[str, Any]:
+    # 填充默认值并统一类型，避免前端解析出错
     data = dict(metric)
     data["round_id"] = _as_int(data.get("round_id"), 0)
     data["global_loss"] = _as_float(data.get("global_loss"), 0.0)

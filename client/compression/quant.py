@@ -2,8 +2,11 @@ from typing import List, Tuple
 
 import torch
 
+# 简单对称量化（8-bit / 16-bit）
+
 
 def quantize(values: torch.Tensor, num_bits: int) -> Tuple[float, List[int]]:
+    # 将浮点数压缩成整数 + scale
     if num_bits not in (8, 16):
         raise ValueError("quant_bits must be 8 or 16")
     qmax = 2 ** (num_bits - 1) - 1
@@ -18,4 +21,5 @@ def quantize(values: torch.Tensor, num_bits: int) -> Tuple[float, List[int]]:
 
 
 def dequantize(qvalues: List[int], scale: float) -> torch.Tensor:
+    # 恢复为浮点数
     return torch.tensor(qvalues, dtype=torch.float32) * float(scale)

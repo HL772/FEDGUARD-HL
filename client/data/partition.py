@@ -5,13 +5,17 @@ import torch
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
+# DataAgent（AGENT.md 3.2.H）：Dirichlet 非 IID 切分 + 标签直方图
+
 
 def load_mnist(data_dir: str, download: bool = True) -> datasets.MNIST:
+    # 统一的 MNIST 数据加载入口
     transform = transforms.ToTensor()
     return datasets.MNIST(root=data_dir, train=True, download=download, transform=transform)
 
 
 def _dirichlet_split(labels: np.ndarray, num_clients: int, alpha: float, seed: int) -> List[List[int]]:
+    # Dirichlet 切分：alpha 越小越非 IID
     num_classes = int(labels.max()) + 1
     indices_per_class = [np.where(labels == cls)[0].tolist() for cls in range(num_classes)]
 
@@ -49,6 +53,7 @@ def get_client_loader(
     batch_size: int,
     download: bool = True,
 ) -> Tuple[DataLoader, Dict[int, int]]:
+    # 返回指定客户端的数据加载器与 label 直方图
     dataset = load_mnist(data_dir, download=download)
     labels = np.array(dataset.targets)
     partitions = _dirichlet_split(labels, num_clients, alpha, seed)

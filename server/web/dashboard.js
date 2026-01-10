@@ -2,6 +2,9 @@ if (typeof Chart === "undefined") {
   console.error("Chart.js is not loaded.");
 }
 
+// Dashboard 前端逻辑（AGENT.md 3.1.G / 5.x）：
+// - 消费 MetricsAgent 推送的轮次指标
+// - 渲染客户端/服务端曲线、告警与管理视图
 const state = {
   rounds: [],
   loss: [],
@@ -56,6 +59,477 @@ function formatMetric(value, digits) {
     return "-";
   }
   return Number(value).toFixed(digits);
+}
+
+function resetSummaryCards() {
+  const mapping = {
+    "summary-round": "-",
+    "summary-participants": "-",
+    "summary-round-time": "-",
+    "summary-dp": "-",
+    "summary-agg": "-",
+    "summary-sampling": "-",
+    "summary-epsilon": "-",
+    "summary-upload": "-",
+    "summary-compress": "-",
+    "summary-excluded": "-",
+  };
+  Object.keys(mapping).forEach((key) => {
+    const el = document.getElementById(key);
+    if (el) {
+      el.textContent = mapping[key];
+    }
+  });
+}
+
+function resetUiState() {
+  state.rounds = [];
+  state.loss = [];
+  state.accuracy = [];
+  state.epsilonMax = [];
+  state.epsilonAvg = [];
+  state.epsilonAccountant = [];
+  state.epsilonTarget = [];
+  state.noiseMultiplier = [];
+  state.clipRate = [];
+  state.uploadBytes = [];
+  state.downloadBytes = [];
+  state.compressedRatio = [];
+  state.serverEvalLoss = [];
+  state.serverEvalAcc = [];
+  state.serverUpdateNorm = [];
+  state.fairnessAvg = [];
+  state.fairnessMin = [];
+  state.fairnessStd = [];
+  state.fairnessJain = [];
+  state.lastRound = 0;
+  state.metricsByRound = {};
+  state.clientUpdatesRound = 0;
+  state.clientUpdatesPinned = false;
+  state.excludedClients = new Set();
+  state.processedRounds = new Set();
+  state.latestMetric = null;
+  state.detectionTotals = { detected: 0, malicious: 0, truePositive: 0 };
+  state.attackMethods = new Set();
+
+  const roundEl = document.getElementById("round-id");
+  if (roundEl) {
+    roundEl.textContent = "-";
+  }
+  const clientCountEl = document.getElementById("clients-count");
+  if (clientCountEl) {
+    clientCountEl.textContent = "0";
+  }
+  updateClientUpdates([]);
+  updateSummary([]);
+  updateSecuritySummary({});
+  updateSimilarityRank({}, new Map());
+  const alertBody = document.getElementById("alert-body");
+  if (alertBody) {
+    alertBody.innerHTML = "";
+  }
+  resetSummaryCards();
+  rebuildSeries();
+}
+
+function setLaunchStatus(text, isError) {
+  const el = document.getElementById("launch-status");
+  if (!el) {
+    return;
+  }
+  el.textContent = text;
+  el.style.color = isError ? "#ff7a7a" : "";
+}
+
+function getLaunchElements() {
+  return {
+    numClients: document.getElementById("launch-num-clients"),
+    clientsPerRound: document.getElementById("launch-clients-per-round"),
+    clientBatch: document.getElementById("launch-client-batch"),
+    maxRounds: document.getElementById("launch-max-rounds"),
+    onlineTtl: document.getElementById("launch-online-ttl"),
+    dpEnabled: document.getElementById("launch-dp-enabled"),
+    dpMode: document.getElementById("launch-dp-mode"),
+    dpClip: document.getElementById("launch-dp-clip"),
+    dpNoise: document.getElementById("launch-dp-noise"),
+    dpDelta: document.getElementById("launch-dp-delta"),
+    dpTarget: document.getElementById("launch-dp-target"),
+    dpSchedule: document.getElementById("launch-dp-schedule"),
+    dpSigmaRatio: document.getElementById("launch-dp-sigma-ratio"),
+    dpAdaptive: document.getElementById("launch-dp-adaptive"),
+    dpPercentile: document.getElementById("launch-dp-percentile"),
+    dpEma: document.getElementById("launch-dp-ema"),
+    compressionEnabled: document.getElementById("launch-compression-enabled"),
+    topkRatio: document.getElementById("launch-topk-ratio"),
+    quantBits: document.getElementById("launch-quant-bits"),
+    errorFeedback: document.getElementById("launch-error-feedback"),
+    secureAgg: document.getElementById("launch-secure-agg"),
+    maliciousDetect: document.getElementById("launch-malicious-detect"),
+    robustMethod: document.getElementById("launch-robust-method"),
+    trimRatio: document.getElementById("launch-trim-ratio"),
+    byzantineF: document.getElementById("launch-byzantine-f"),
+    lossThreshold: document.getElementById("launch-loss-threshold"),
+    normThreshold: document.getElementById("launch-norm-threshold"),
+    requireBoth: document.getElementById("launch-require-both"),
+    minMad: document.getElementById("launch-min-mad"),
+    cosineEnabled: document.getElementById("launch-cosine-enabled"),
+    cosineThreshold: document.getElementById("launch-cosine-threshold"),
+    cosineTopk: document.getElementById("launch-cosine-topk"),
+    attackEnabled: document.getElementById("launch-attack-enabled"),
+    attackMethod: document.getElementById("launch-attack-method"),
+    attackScale: document.getElementById("launch-attack-scale"),
+    attackFraction: document.getElementById("launch-attack-fraction"),
+    attackRanks: document.getElementById("launch-attack-ranks"),
+    attackLabelFlip: document.getElementById("launch-attack-label-flip"),
+    attackLossScale: document.getElementById("launch-attack-loss-scale"),
+    attackAccScale: document.getElementById("launch-attack-acc-scale"),
+    trainAlgo: document.getElementById("launch-train-algo"),
+    trainLr: document.getElementById("launch-train-lr"),
+    trainEpochs: document.getElementById("launch-train-epochs"),
+    fedproxMu: document.getElementById("launch-fedprox-mu"),
+    deadlineMs: document.getElementById("launch-deadline-ms"),
+    serverLr: document.getElementById("launch-server-lr"),
+    serverClip: document.getElementById("launch-server-clip"),
+    privateHeadLr: document.getElementById("launch-private-head-lr"),
+    privateHeadEpochs: document.getElementById("launch-private-head-epochs"),
+    dataAlpha: document.getElementById("launch-data-alpha"),
+    samplingEnabled: document.getElementById("launch-sampling-enabled"),
+    samplingStrategy: document.getElementById("launch-sampling-strategy"),
+    samplingEpsilon: document.getElementById("launch-sampling-epsilon"),
+    samplingEma: document.getElementById("launch-sampling-ema"),
+    samplingTimeoutPenalty: document.getElementById("launch-sampling-timeout-penalty"),
+    samplingAnomalyPenalty: document.getElementById("launch-sampling-anomaly-penalty"),
+    samplingFairness: document.getElementById("launch-sampling-fairness"),
+    samplingSoftmax: document.getElementById("launch-sampling-softmax"),
+    timeoutEnabled: document.getElementById("launch-timeout-enabled"),
+    timeoutRanks: document.getElementById("launch-timeout-ranks"),
+    timeoutCooldown: document.getElementById("launch-timeout-cooldown"),
+    downloadData: document.getElementById("launch-download-data"),
+    stayOnline: document.getElementById("launch-stay-online"),
+  };
+}
+
+function parseIntField(el, fallback) {
+  if (!el) {
+    return fallback;
+  }
+  const value = parseInt(el.value, 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function parseFloatField(el) {
+  if (!el || el.value === "") {
+    return null;
+  }
+  const value = parseFloat(el.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseIntOptional(el) {
+  if (!el || el.value === "") {
+    return null;
+  }
+  const value = parseInt(el.value, 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function parseCsvInts(el) {
+  if (!el || el.value.trim() === "") {
+    return null;
+  }
+  return el.value
+    .split(",")
+    .map((value) => parseInt(value.trim(), 10))
+    .filter((value) => Number.isFinite(value));
+}
+
+function setFieldValue(el, value) {
+  if (!el) {
+    return;
+  }
+  if (value === null || value === undefined) {
+    el.value = "";
+    return;
+  }
+  el.value = value;
+}
+
+function setChecked(el, value) {
+  if (!el) {
+    return;
+  }
+  el.checked = !!value;
+}
+
+function getServerUrl() {
+  let origin = window.location.origin || "";
+  if (!origin) {
+    return "";
+  }
+  origin = origin.replace("0.0.0.0", "127.0.0.1");
+  origin = origin.replace("[::]", "127.0.0.1");
+  origin = origin.replace("://localhost", "://127.0.0.1");
+  return origin;
+}
+
+async function loadDefaultConfig() {
+  try {
+    const resp = await fetch("/api/v1/config/default");
+    if (!resp.ok) {
+      return;
+    }
+    const payload = await resp.json();
+    const cfg = payload.config || {};
+    const runtime = payload.runtime || {};
+    const elements = getLaunchElements();
+
+    const defaultClients = runtime.num_clients ?? 14;
+    setFieldValue(elements.numClients, defaultClients);
+    setFieldValue(
+      elements.clientsPerRound,
+      runtime.clients_per_round ?? 8
+    );
+    setFieldValue(
+      elements.clientBatch,
+      runtime.client_batch_size ?? defaultClients
+    );
+    setFieldValue(elements.maxRounds, runtime.max_rounds ?? 20);
+    setFieldValue(elements.onlineTtl, runtime.online_ttl_sec ?? 60);
+
+    const train = cfg.train || {};
+    setFieldValue(elements.trainAlgo, train.algo || "fedavg");
+    setFieldValue(elements.trainLr, train.lr);
+    setFieldValue(elements.trainEpochs, train.epochs);
+    setFieldValue(elements.fedproxMu, train.fedprox_mu);
+    setFieldValue(elements.deadlineMs, train.deadline_ms);
+    setFieldValue(elements.serverLr, train.server_lr);
+    setFieldValue(elements.serverClip, train.server_update_clip);
+    setFieldValue(elements.privateHeadLr, train.private_head_lr);
+    setFieldValue(elements.privateHeadEpochs, train.private_head_epochs);
+
+    const data = cfg.data || {};
+    setFieldValue(elements.dataAlpha, data.alpha);
+
+    const sampling = cfg.sampling || {};
+    setChecked(elements.samplingEnabled, sampling.enabled);
+    setFieldValue(elements.samplingStrategy, sampling.strategy || "random");
+    setFieldValue(elements.samplingEpsilon, sampling.epsilon);
+    setFieldValue(elements.samplingEma, sampling.score_ema);
+    setFieldValue(elements.samplingTimeoutPenalty, sampling.timeout_penalty);
+    setFieldValue(elements.samplingAnomalyPenalty, sampling.anomaly_penalty);
+    setFieldValue(elements.samplingFairness, sampling.fairness_window);
+    setFieldValue(elements.samplingSoftmax, sampling.softmax_temp);
+
+    const dp = cfg.dp || {};
+    setChecked(elements.dpEnabled, dp.enabled);
+    setFieldValue(elements.dpMode, dp.mode || "off");
+    setFieldValue(elements.dpClip, dp.clip_norm);
+    setFieldValue(elements.dpNoise, dp.noise_multiplier);
+    setFieldValue(elements.dpDelta, dp.delta);
+    setFieldValue(elements.dpTarget, dp.target_epsilon);
+    const schedule = dp.schedule || {};
+    setFieldValue(elements.dpSchedule, schedule.type || "");
+    setFieldValue(elements.dpSigmaRatio, schedule.sigma_end_ratio);
+    const adaptive = dp.adaptive_clip || {};
+    setChecked(elements.dpAdaptive, adaptive.enabled);
+    setFieldValue(elements.dpPercentile, adaptive.percentile);
+    setFieldValue(elements.dpEma, adaptive.ema);
+
+    const compression = cfg.compression || {};
+    setChecked(elements.compressionEnabled, compression.enabled);
+    setFieldValue(elements.topkRatio, compression.topk_ratio);
+    setFieldValue(elements.quantBits, compression.quant_bits || 16);
+    setChecked(elements.errorFeedback, compression.error_feedback);
+
+    const security = cfg.security || {};
+    setChecked(elements.secureAgg, security.secure_aggregation);
+    setChecked(elements.maliciousDetect, security.malicious_detection);
+    setFieldValue(elements.robustMethod, security.robust_aggregation || "fedavg");
+    setFieldValue(elements.trimRatio, security.trim_ratio);
+    setFieldValue(elements.byzantineF, security.byzantine_f);
+    setFieldValue(elements.lossThreshold, security.loss_threshold);
+    setFieldValue(elements.normThreshold, security.norm_threshold);
+    setChecked(elements.requireBoth, security.require_both);
+    setFieldValue(elements.minMad, security.min_mad);
+    const cosine = security.cosine_detection || {};
+    setChecked(elements.cosineEnabled, cosine.enabled);
+    setFieldValue(elements.cosineThreshold, cosine.threshold);
+    setFieldValue(elements.cosineTopk, cosine.top_k);
+
+    const attack = security.attack_simulation || {};
+    setChecked(elements.attackEnabled, attack.enabled);
+    setFieldValue(elements.attackMethod, attack.method || "scale");
+    setFieldValue(elements.attackScale, attack.scale);
+    setFieldValue(elements.attackFraction, attack.malicious_fraction);
+    setFieldValue(elements.attackLossScale, attack.loss_scale);
+    setFieldValue(elements.attackAccScale, attack.accuracy_scale);
+    setChecked(elements.attackLabelFlip, attack.label_flip);
+    if (elements.attackRanks && Array.isArray(attack.malicious_ranks)) {
+      elements.attackRanks.value = attack.malicious_ranks.join(",");
+    }
+
+    const timeout = train.timeout_simulation || {};
+    setChecked(elements.timeoutEnabled, timeout.enabled);
+    if (elements.timeoutRanks) {
+      const ranks = Array.isArray(timeout.client_ranks)
+        ? timeout.client_ranks
+        : Array.isArray(timeout.malicious_ranks)
+          ? timeout.malicious_ranks
+          : [];
+      elements.timeoutRanks.value = ranks.map((value) => String(value)).join(",");
+    }
+    setFieldValue(elements.timeoutCooldown, timeout.cooldown_rounds);
+  } catch (err) {
+    console.warn("load default config failed", err);
+  }
+}
+
+async function loadSessionStatus() {
+  try {
+    const resp = await fetch("/api/v1/session/status");
+    if (!resp.ok) {
+      return;
+    }
+    const payload = await resp.json();
+    const running = !!payload.running;
+    setLaunchStatus(running ? "状态：运行中" : "状态：未启动", false);
+    const params = payload.params || {};
+    const elements = getLaunchElements();
+    if (elements.numClients && params.num_clients) {
+      elements.numClients.value = params.num_clients;
+    }
+    if (elements.clientsPerRound && params.clients_per_round) {
+      elements.clientsPerRound.value = params.clients_per_round;
+    }
+    if (elements.clientBatch && params.client_batch_size) {
+      elements.clientBatch.value = params.client_batch_size;
+    }
+    if (elements.maxRounds && params.max_rounds) {
+      elements.maxRounds.value = params.max_rounds;
+    }
+    if (elements.dpEnabled && params.dp_enabled !== undefined && params.dp_enabled !== null) {
+      elements.dpEnabled.checked = !!params.dp_enabled;
+    }
+    if (elements.dpMode && params.dp_mode) {
+      elements.dpMode.value = params.dp_mode;
+    }
+    if (elements.trainAlgo && params.train_algo) {
+      elements.trainAlgo.value = params.train_algo;
+    }
+  } catch (err) {
+    console.warn("load session status failed", err);
+  }
+}
+
+async function startSession() {
+  const elements = getLaunchElements();
+  const numClients = parseIntField(elements.numClients, 3);
+  const payload = {
+    server_url: getServerUrl(),
+    num_clients: numClients,
+    clients_per_round: parseIntField(elements.clientsPerRound, numClients),
+    client_batch_size: parseIntField(elements.clientBatch, 1),
+    max_rounds: parseIntField(elements.maxRounds, 3),
+    online_ttl_sec: parseFloatField(elements.onlineTtl),
+    dp_enabled: elements.dpEnabled ? elements.dpEnabled.checked : undefined,
+    dp_mode: elements.dpMode ? elements.dpMode.value : "",
+    dp_clip_norm: parseFloatField(elements.dpClip),
+    dp_noise_multiplier: parseFloatField(elements.dpNoise),
+    dp_delta: parseFloatField(elements.dpDelta),
+    dp_target_epsilon: parseFloatField(elements.dpTarget),
+    dp_schedule_type: elements.dpSchedule ? elements.dpSchedule.value : "",
+    dp_sigma_end_ratio: parseFloatField(elements.dpSigmaRatio),
+    dp_adaptive_clip_enabled: elements.dpAdaptive ? elements.dpAdaptive.checked : undefined,
+    dp_adaptive_clip_percentile: parseFloatField(elements.dpPercentile),
+    dp_adaptive_clip_ema: parseFloatField(elements.dpEma),
+    compression_enabled: elements.compressionEnabled
+      ? elements.compressionEnabled.checked
+      : undefined,
+    compression_topk_ratio: parseFloatField(elements.topkRatio),
+    compression_quant_bits: parseIntOptional(elements.quantBits),
+    compression_error_feedback: elements.errorFeedback
+      ? elements.errorFeedback.checked
+      : undefined,
+    secure_aggregation: elements.secureAgg ? elements.secureAgg.checked : undefined,
+    malicious_detection: elements.maliciousDetect ? elements.maliciousDetect.checked : undefined,
+    robust_aggregation: elements.robustMethod ? elements.robustMethod.value : "",
+    trim_ratio: parseFloatField(elements.trimRatio),
+    byzantine_f: parseIntOptional(elements.byzantineF),
+    loss_threshold: parseFloatField(elements.lossThreshold),
+    norm_threshold: parseFloatField(elements.normThreshold),
+    require_both: elements.requireBoth ? elements.requireBoth.checked : undefined,
+    min_mad: parseFloatField(elements.minMad),
+    cosine_enabled: elements.cosineEnabled ? elements.cosineEnabled.checked : undefined,
+    cosine_threshold: parseFloatField(elements.cosineThreshold),
+    cosine_top_k: parseIntOptional(elements.cosineTopk),
+    attack_enabled: elements.attackEnabled ? elements.attackEnabled.checked : undefined,
+    attack_method: elements.attackMethod ? elements.attackMethod.value : "",
+    attack_scale: parseFloatField(elements.attackScale),
+    attack_malicious_fraction: parseFloatField(elements.attackFraction),
+    attack_malicious_ranks: parseCsvInts(elements.attackRanks),
+    attack_label_flip: elements.attackLabelFlip ? elements.attackLabelFlip.checked : undefined,
+    attack_loss_scale: parseFloatField(elements.attackLossScale),
+    attack_accuracy_scale: parseFloatField(elements.attackAccScale),
+    train_algo: elements.trainAlgo ? elements.trainAlgo.value : "",
+    train_lr: parseFloatField(elements.trainLr),
+    train_epochs: parseIntOptional(elements.trainEpochs),
+    fedprox_mu: parseFloatField(elements.fedproxMu),
+    deadline_ms: parseFloatField(elements.deadlineMs),
+    server_lr: parseFloatField(elements.serverLr),
+    server_update_clip: parseFloatField(elements.serverClip),
+    private_head_lr: parseFloatField(elements.privateHeadLr),
+    private_head_epochs: parseIntOptional(elements.privateHeadEpochs),
+    data_alpha: parseFloatField(elements.dataAlpha),
+    sampling_enabled: elements.samplingEnabled ? elements.samplingEnabled.checked : undefined,
+    sampling_strategy: elements.samplingStrategy ? elements.samplingStrategy.value : "",
+    sampling_epsilon: parseFloatField(elements.samplingEpsilon),
+    sampling_score_ema: parseFloatField(elements.samplingEma),
+    sampling_timeout_penalty: parseFloatField(elements.samplingTimeoutPenalty),
+    sampling_anomaly_penalty: parseFloatField(elements.samplingAnomalyPenalty),
+    sampling_fairness_window: parseIntOptional(elements.samplingFairness),
+    sampling_softmax_temp: parseFloatField(elements.samplingSoftmax),
+    timeout_simulation_enabled: elements.timeoutEnabled
+      ? elements.timeoutEnabled.checked
+      : undefined,
+    timeout_client_ranks: parseCsvInts(elements.timeoutRanks),
+    timeout_cooldown_rounds: parseIntOptional(elements.timeoutCooldown),
+    download_data: elements.downloadData ? elements.downloadData.checked : false,
+    stay_online_on_not_selected: elements.stayOnline ? elements.stayOnline.checked : false,
+  };
+  setLaunchStatus("状态：启动中...", false);
+  try {
+    const resp = await fetch("/api/v1/session/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      setLaunchStatus(`启动失败：${text || resp.status}`, true);
+      return;
+    }
+    resetUiState();
+    await loadHistory();
+    await refreshOnlineClients();
+    setLaunchStatus("状态：运行中", false);
+  } catch (err) {
+    setLaunchStatus(`启动失败：${err}`, true);
+  }
+}
+
+async function stopSession() {
+  setLaunchStatus("状态：停止中...", false);
+  try {
+    const resp = await fetch("/api/v1/session/stop", { method: "POST" });
+    if (!resp.ok) {
+      const text = await resp.text();
+      setLaunchStatus(`停止失败：${text || resp.status}`, true);
+      return;
+    }
+    setLaunchStatus("状态：未启动", false);
+  } catch (err) {
+    setLaunchStatus(`停止失败：${err}`, true);
+  }
 }
 
 function createLineChart(ctx, label, color) {
@@ -153,6 +627,7 @@ function createDualChart(ctx) {
   });
 }
 
+// 客户端侧曲线
 const lossChart = createLineChart(document.getElementById("loss-chart"), "损失", "#ffb454");
 const accChart = createLineChart(document.getElementById("acc-chart"), "准确率", "#42c2ff");
 const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
@@ -217,6 +692,7 @@ const epsilonChart = new Chart(document.getElementById("epsilon-chart"), {
     },
   },
 });
+// 通信负载（上传 KB + 压缩比）
 const commChart = createDualChart(document.getElementById("comm-chart"));
 const dpControlChart = new Chart(document.getElementById("dp-control-chart"), {
   type: "line",
@@ -371,11 +847,14 @@ function updateOnlineClients(el, clients, timedOut) {
     const isExcluded = !!client.blacklisted;
     const isTimeout = timedOutSet.has(String(client.client_id || ""));
     const isCooldown = !!client.cooldown;
+    const isOnline = client.online !== false;
     li.classList.add("client-item");
     if (isExcluded) {
       li.classList.add("is-excluded");
     } else if (isTimeout || isCooldown) {
       li.classList.add("is-timeout");
+    } else if (!isOnline) {
+      li.classList.add("is-offline");
     } else {
       li.classList.add("is-online");
     }
@@ -387,6 +866,8 @@ function updateOnlineClients(el, clients, timedOut) {
       status.textContent = "已拉黑";
     } else if (isTimeout || isCooldown) {
       status.textContent = "超时";
+    } else if (!isOnline) {
+      status.textContent = "离线";
     } else {
       status.textContent = "在线";
     }
@@ -402,6 +883,7 @@ function updateOnlineClients(el, clients, timedOut) {
 }
 
 function updateClientManagement(clients, timedOut) {
+  // 客户端管理：在线列表 + 手动拉黑/解除
   const body = document.getElementById("client-manage-body");
   if (!body) {
     return;
@@ -414,11 +896,14 @@ function updateClientManagement(clients, timedOut) {
     const isBlacklisted = !!client.blacklisted;
     const isTimeout =
       timedOutSet.has(String(client.client_id || "")) || !!client.cooldown;
+    const isOnline = client.online !== false;
     let statusLabel = "正常";
     if (isBlacklisted) {
       statusLabel = "已拉黑";
     } else if (isTimeout) {
       statusLabel = "超时";
+    } else if (!isOnline) {
+      statusLabel = "离线";
     }
 
     const labelCell = document.createElement("td");
@@ -431,6 +916,8 @@ function updateClientManagement(clients, timedOut) {
       statusCell.classList.add("status-excluded");
     } else if (isTimeout) {
       statusCell.classList.add("status-timeout");
+    } else if (!isOnline) {
+      statusCell.classList.add("status-not-selected");
     } else {
       statusCell.classList.add("status-included");
     }
@@ -476,6 +963,7 @@ async function postClientAction(action, clientId) {
 }
 
 async function refreshOnlineClients() {
+  // 主动刷新在线客户端（管理操作后即时更新）
   try {
     const resp = await fetch("/api/v1/clients");
     if (!resp.ok) {
@@ -486,7 +974,8 @@ async function refreshOnlineClients() {
     const timedOut = new Set(
       (state.latestMetric?.dropped_clients || []).map((value) => String(value))
     );
-    document.getElementById("clients-count").textContent = clients.length;
+    const onlineCount = clients.filter((client) => client && client.online !== false).length;
+    document.getElementById("clients-count").textContent = onlineCount;
     updateOnlineClients(document.getElementById("client-list"), clients, timedOut);
     updateClientManagement(clients, timedOut);
   } catch (err) {
@@ -506,6 +995,7 @@ function formatLabelHistogram(histogram) {
 }
 
 function updateSummaryCards(metric) {
+  // 概览卡片：轮次与稳定属性（聚合/DP/采样）
   const roundId = metric.round_id || 0;
   const participants = metric.participants || [];
   const counts = metric.client_counts || {};
@@ -538,6 +1028,7 @@ function updateSummaryCards(metric) {
 }
 
 function updateClientUpdates(updates) {
+  // 客户端更新表（本轮回传统计）
   const body = document.getElementById("client-update-body");
   if (!body) {
     return;
@@ -648,6 +1139,7 @@ function getRoundIds() {
 }
 
 function rebuildSeries() {
+  // 由 metricsByRound 重建曲线序列
   const roundIds = getRoundIds();
 
   state.rounds = roundIds;
@@ -763,6 +1255,7 @@ async function loadHistory() {
 }
 
 function appendAlerts(alerts) {
+  // 告警日志表格（异常/超时/拉黑）
   const body = document.getElementById("alert-body");
   const nameMap = arguments.length > 1 ? arguments[1] : null;
   alerts.forEach((alert) => {
@@ -820,6 +1313,7 @@ function updateSummary(items) {
 }
 
 function updateSecuritySummary(metric) {
+  // 检测摘要：P/R/F1、阈值、攻击模拟
   const list = document.getElementById("security-summary");
   if (!list) {
     return;
@@ -846,6 +1340,7 @@ function updateSecuritySummary(metric) {
 }
 
 function updateSimilarityRank(metric, nameMap) {
+  // 相似度排名：基于 cosine 分数的 z-score
   const list = document.getElementById("similarity-rank");
   if (!list) {
     return;
@@ -906,6 +1401,7 @@ function updateSimilarityRank(metric, nameMap) {
 }
 
 function applyMetric(metric) {
+  // 单条指标入库并驱动 UI 更新
   const roundId = Number(metric.round_id || 0);
   if (!Number.isFinite(roundId) || roundId <= 0) {
     return;
@@ -918,9 +1414,14 @@ function applyMetric(metric) {
 
   const clients = metric.online_clients || [];
   const timedOut = new Set((metric.dropped_clients || []).map((value) => String(value)));
-  document.getElementById("clients-count").textContent = clients.length;
-  updateOnlineClients(document.getElementById("client-list"), clients, timedOut);
-  updateClientManagement(clients, timedOut);
+  if (clients.length > 0) {
+    const onlineCount = clients.filter((client) => client && client.online !== false).length;
+    document.getElementById("clients-count").textContent = onlineCount;
+    updateOnlineClients(document.getElementById("client-list"), clients, timedOut);
+    updateClientManagement(clients, timedOut);
+  } else {
+    void refreshOnlineClients();
+  }
 
   const nameMap = new Map();
   if (Array.isArray(metric.online_clients)) {
@@ -1125,7 +1626,18 @@ async function init() {
       });
     }
 
+    const launchStart = document.getElementById("launch-start");
+    const launchStop = document.getElementById("launch-stop");
+    if (launchStart) {
+      launchStart.addEventListener("click", startSession);
+    }
+    if (launchStop) {
+      launchStop.addEventListener("click", stopSession);
+    }
+
     setupHelpModal();
+    await loadDefaultConfig();
+    await loadSessionStatus();
     await loadHistory();
     await refreshOnlineClients();
     uiInitialized = true;

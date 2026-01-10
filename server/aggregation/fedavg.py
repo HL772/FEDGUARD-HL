@@ -5,6 +5,7 @@ from torch import nn
 
 
 class FedPerModel(nn.Module):
+    # 简化版 MNIST MLP（FedPer / FedPer-dual 所需的 backbone + head + private_head）
     def __init__(self) -> None:
         super().__init__()
         self.backbone = nn.Sequential(
@@ -28,19 +29,23 @@ from server.aggregation.robust import (
 
 
 def create_model() -> nn.Module:
+    # 统一模型工厂：用于服务端初始化/评估
     return FedPerModel()
 
 
 def state_dict_to_list(state_dict: Dict[str, torch.Tensor]) -> Dict[str, list]:
+    # 转换为可 JSON 序列化的 list 形式
     return {k: v.detach().cpu().tolist() for k, v in state_dict.items()}
 
 
 def init_model_state() -> Dict[str, list]:
+    # 初始化全局模型参数（round 0）
     model = create_model()
     return state_dict_to_list(model.state_dict())
 
 
 def apply_delta(base_state: Dict[str, list], delta_state: Dict[str, list]) -> Dict[str, list]:
+    # 应用完整 delta（FedAvg 更新）
     updated: Dict[str, list] = {}
     for key, base_value in base_state.items():
         base_tensor = torch.tensor(base_value, dtype=torch.float32)
@@ -52,6 +57,7 @@ def apply_delta(base_state: Dict[str, list], delta_state: Dict[str, list]) -> Di
 def apply_delta_partial(
     base_state: Dict[str, list], delta_state: Dict[str, list]
 ) -> Dict[str, list]:
+    # 只对部分参数应用 delta（FedPer 仅聚合 backbone）
     updated: Dict[str, list] = {}
     for key, base_value in base_state.items():
         if key not in delta_state:
@@ -64,6 +70,7 @@ def apply_delta_partial(
 
 
 class AggregationAgent:
+    # AggregationAgent（AGENT.md 3.1.C）：FedAvg + 鲁棒聚合
     def aggregate(
         self,
         updates: List[Dict[str, object]],

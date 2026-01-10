@@ -4,6 +4,10 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 
+# ClientManagerAgent（AGENT.md 3.1.B）：
+# - 注册与心跳
+# - 在线/可参与资格维护
+# - 拉黑管理（恶意检测 + 手动管理）
 class ClientManagerAgent:
     def __init__(self, online_ttl_sec: float = 60.0) -> None:
         self._clients: Dict[str, Dict[str, object]] = {}
@@ -12,6 +16,7 @@ class ClientManagerAgent:
         self._online_ttl_sec = online_ttl_sec
 
     def register(self, client_name: Optional[str] = None) -> Tuple[str, bool]:
+        # 注册客户端；若重名则复用 client_id（便于演示与复现）
         now = time.time()
         name = client_name or ""
         with self._lock:
@@ -32,6 +37,7 @@ class ClientManagerAgent:
             return client_id, False
 
     def heartbeat(self, client_id: str, timestamp: Optional[float] = None) -> bool:
+        # 更新 last_seen，维持在线状态
         now = timestamp if timestamp is not None else time.time()
         with self._lock:
             if client_id not in self._clients:
@@ -48,6 +54,7 @@ class ClientManagerAgent:
             return str(self._clients.get(client_id, {}).get("client_name", ""))
 
     def online_clients(self) -> List[Dict[str, object]]:
+        # 返回在线客户端，用于 Dashboard 展示
         now = time.time()
         clients: List[Dict[str, object]] = []
         with self._lock:
@@ -64,7 +71,30 @@ class ClientManagerAgent:
                     )
         return clients
 
+    def all_clients(self) -> List[Dict[str, object]]:
+        # 返回全部客户端并标注在线状态（用于管理与状态展示）
+        now = time.time()
+        clients: List[Dict[str, object]] = []
+        with self._lock:
+            for client_id, info in self._clients.items():
+                last_seen = float(info.get("last_seen", 0.0))
+                online = now - last_seen <= self._online_ttl_sec
+                clients.append(
+                    {
+                        "client_id": client_id,
+                        "client_name": info.get("client_name", ""),
+                        "last_seen": last_seen,
+                        "blacklisted": client_id in self._blacklist,
+                        "online": online,
+                    }
+                )
+        clients.sort(
+            key=lambda item: str(item.get("client_name") or item.get("client_id") or "")
+        )
+        return clients
+
     def eligible_client_ids(self) -> List[str]:
+        # 在线且未被拉黑的客户端（可参与训练）
         now = time.time()
         eligible: List[str] = []
         with self._lock:
@@ -85,12 +115,14 @@ class ClientManagerAgent:
             )
 
     def blacklist_clients(self, client_ids: List[str], reason: str = "anomaly") -> None:
+        # 拉黑客户端并记录原因（不再具备参与资格）
         now = time.time()
         with self._lock:
             for client_id in client_ids:
                 self._blacklist[client_id] = {"reason": reason, "since": now}
 
     def unblacklist_clients(self, client_ids: List[str]) -> None:
+        # 手动解除拉黑
         with self._lock:
             for client_id in client_ids:
                 self._blacklist.pop(client_id, None)
@@ -100,6 +132,7 @@ class ClientManagerAgent:
             return client_id in self._blacklist
 
     def record_selected(self, client_ids: List[str], round_id: int) -> None:
+        # 记录被选中次数与最近轮次（用于采样策略）
         with self._lock:
             for client_id in client_ids:
                 if client_id not in self._clients:
@@ -109,6 +142,7 @@ class ClientManagerAgent:
                 info["last_selected_round"] = int(round_id)
 
     def record_timeouts(self, client_ids: List[str]) -> None:
+        # 记录超时次数（用于采样惩罚）
         with self._lock:
             for client_id in client_ids:
                 if client_id not in self._clients:

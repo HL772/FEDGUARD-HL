@@ -26,6 +26,9 @@ from client.train.local_trainer import (
     update_state_dict_from_list,
 )
 
+# 客户端主进程（AGENT.md 3.2.H/I/J/K/L/M）：
+# - 数据切分、训练、DP、压缩、掩码与通信上报
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="FedGuard client process")
@@ -58,6 +61,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _register_with_retry(api: ApiClient, client_name: Optional[str], join_timeout: float) -> str:
+    # 加入服务器：允许多次重试，避免启动竞态导致失败
     deadline = time.time() + join_timeout
     attempt = 0
     while time.time() < deadline:
@@ -144,6 +148,7 @@ def _resolve_private_keys(keys: Iterable[str], private_patterns: List[str]) -> S
 
 
 def _load_config(path: str) -> Dict[str, Any]:
+    # 加载配置文件（yaml/简化解析）
     if not path or not os.path.exists(path):
         return {}
     try:
@@ -189,6 +194,7 @@ def _is_process_alive(pid: int) -> bool:
 
 
 def _ensure_heartbeat_process(args: argparse.Namespace) -> None:
+    # 仅心跳模式：避免重复启动多个心跳进程
     if not args.client_name:
         return
     lock_path = _heartbeat_lock_path(args.client_name)
@@ -228,6 +234,7 @@ def main() -> int:
     args = _parse_args()
     api = ApiClient(args.server_url, timeout=args.request_timeout)
     try:
+        # 注册客户端（ClientManagerAgent）
         client_id = _register_with_retry(api, args.client_name, args.join_timeout)
     except ApiError as exc:
         print(f"[client] failed to join server: {exc}", flush=True)
@@ -235,12 +242,14 @@ def main() -> int:
 
     print(f"[client] registered client_id={client_id}", flush=True)
     if args.register_only:
+        # 只注册：用于调试在线状态
         try:
             api.heartbeat(client_id)
         except ApiError as exc:
             print(f"[client] heartbeat failed: {exc}", flush=True)
         return 0
     if args.heartbeat_only:
+        # 仅心跳模式：保持在线但不参与训练
         if args.client_name:
             lock_path = _heartbeat_lock_path(args.client_name)
             try:
@@ -259,6 +268,7 @@ def main() -> int:
     except ApiError as exc:
         print(f"[client] heartbeat failed: {exc}", flush=True)
 
+    # 读取全局配置（DP/压缩/安全/训练/模型切分）
     config = _load_config(args.config)
     dp_config = config.get("dp", {})
     compression_config = config.get("compression", {})
@@ -267,6 +277,7 @@ def main() -> int:
     model_config = config.get("model", {})
     split_config = model_config.get("split", {})
 
+    # DP 参数（差分隐私：裁剪 + 噪声）
     dp_enabled = bool(dp_config.get("enabled", False))
     clip_norm = float(dp_config.get("clip_norm", 1.0))
     noise_multiplier = float(dp_config.get("noise_multiplier", 0.0))
@@ -280,6 +291,7 @@ def main() -> int:
         private_head_lr = float(private_head_lr)
     private_head_epochs = int(train_config.get("private_head_epochs", 1))
 
+    # 压缩参数（Top-K + 量化 + 误差反馈）
     compression_enabled = bool(compression_config.get("enabled", False))
     topk_ratio = float(compression_config.get("topk_ratio", 1.0))
     quant_bits = int(compression_config.get("quant_bits", 8))
@@ -288,6 +300,7 @@ def main() -> int:
     secure_compressor = CompressionAgent(topk_ratio=1.0, quant_bits=quant_bits)
     error_feedback = ErrorFeedbackAgent()
 
+    # 安全聚合与攻击模拟参数
     secure_aggregation = bool(security_config.get("secure_aggregation", False))
     mask_scale = float(security_config.get("mask_scale", 1.0))
     masking_agent = SecureMaskingAgent(mask_scale=mask_scale)
@@ -311,6 +324,7 @@ def main() -> int:
         )
 
     try:
+        # DataAgent：非 IID 数据切分（Dirichlet）
         data_config = config.get("data", {})
         alpha = float(data_config.get("alpha", args.alpha))
         train_loader, label_hist = get_client_loader(
@@ -333,6 +347,7 @@ def main() -> int:
     last_wait_reason = ""
     last_wait_log = 0.0
     private_head_state: Optional[Dict[str, list]] = None
+    # 训练循环：拉取模型 -> 本地训练 -> DP/压缩/掩码 -> 提交更新
     while True:
         if time.time() - last_heartbeat >= args.heartbeat_interval:
             try:
@@ -341,6 +356,7 @@ def main() -> int:
                 print(f"[client] heartbeat failed: {exc}", flush=True)
             last_heartbeat = time.time()
         try:
+            # 拉取本轮模型与配置
             resp = api.get_model(client_id)
         except ApiError as exc:
             print(f"[client] get_model failed: {exc}", flush=True)
@@ -349,6 +365,7 @@ def main() -> int:
 
         status = resp.get("status")
         if status == "wait":
+            # 未入选/超时等情况：等待或单轮退出
             wait_reason = str(resp.get("reason") or "")
             now = time.time()
             if wait_reason != last_wait_reason or now - last_wait_log >= 10.0:
@@ -381,6 +398,7 @@ def main() -> int:
         noise_multiplier_round = float(round_dp.get("noise_multiplier", noise_multiplier))
         dp_delta_round = float(round_dp.get("delta", dp_delta))
 
+        # 初始化模型并加载服务端参数
         model = create_model()
         load_state_dict_from_list(model, model_state)
         backbone_keys: Set[str] = set()
@@ -388,6 +406,7 @@ def main() -> int:
         private_keys: Set[str] = set()
         aggregated_keys: Set[str] = set()
         if round_algo in ("fedper", "fedper_dual"):
+            # FedPer 仅聚合 backbone；FedPer-dual 还保留私有 head
             if not backbone_patterns and not head_patterns:
                 backbone_patterns = ["backbone.*"]
                 head_patterns = ["head.*"]
@@ -409,6 +428,7 @@ def main() -> int:
                     }
                 else:
                     update_state_dict_from_list(model, private_head_state)
+        # 本地训练（FedAvg/FedProx/FedPer/FedPer-dual）
         start_train = time.time()
         if round_algo == "fedper_dual":
             shared_params = {}
@@ -444,6 +464,7 @@ def main() -> int:
             reported_loss = loss * attack_loss_scale
             reported_accuracy = max(0.0, min(1.0, accuracy * attack_accuracy_scale))
         if round_algo in ("fedper", "fedper_dual") and private_keys:
+            # 保存私有 head（不参与聚合）
             private_head_state = extract_state_by_keys(model, private_keys)
         updated_state = state_dict_to_list(model)
 
@@ -453,6 +474,7 @@ def main() -> int:
             delta_tensor = torch.tensor(value, dtype=torch.float32) - base_tensor
             delta_state[key] = delta_tensor.cpu().tolist()
         if aggregated_keys:
+            # 仅上传聚合部分（FedPer 方案）
             delta_state = {key: value for key, value in delta_state.items() if key in aggregated_keys}
 
         attack_type = "none"
@@ -469,6 +491,7 @@ def main() -> int:
         pre_dp_norm = None
         clip_applied = None
         if dp_enabled_round:
+            # DifferentialPrivacyAgent：裁剪 + 高斯噪声 + ε 估计
             sample_rate = min(1.0, float(args.batch_size) / max(num_samples, 1))
             delta_state, epsilon, pre_dp_norm, clip_applied = apply_dp(
                 delta_state,
@@ -489,6 +512,7 @@ def main() -> int:
         compressed_update = None
         compressed_type = None
         if round_secure:
+            # SecureMaskingAgent：对更新做 pairwise 掩码
             if not participants:
                 print("[client] missing participants list for secure aggregation", flush=True)
                 time.sleep(args.heartbeat_interval)
@@ -504,11 +528,13 @@ def main() -> int:
                 round_id=round_id,
             )
             if compression_enabled:
+                # 安全聚合 + 压缩：压缩掩码后的更新
                 compressed_update = secure_compressor.compress(masked_update)
                 compressed_type = "masked"
                 masked_update = None
         else:
             if compression_enabled:
+                # 压缩更新（Top-K + 量化 + 误差反馈）
                 ef_state = delta_state
                 if error_feedback_enabled:
                     ef_state = error_feedback.apply(delta_state)
@@ -519,6 +545,7 @@ def main() -> int:
                 compressed_type = "delta"
 
         try:
+            # CommAgent：提交更新 + 统计指标
             delta_payload = None if round_secure or compression_enabled else delta_state
             payload_obj = masked_update or compressed_update or delta_payload or {}
             upload_bytes = len(json.dumps(payload_obj).encode("utf-8"))

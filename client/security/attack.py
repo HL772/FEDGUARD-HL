@@ -3,6 +3,8 @@ from typing import Dict, Iterable, Optional
 
 import torch
 
+# 攻击模拟（AGENT.md 3.1.E 验收）：scale / sign-flip
+
 
 class AttackSimulator:
     def __init__(self, method: str = "none", scale: float = 1.0) -> None:
@@ -16,6 +18,7 @@ class AttackSimulator:
         malicious_ranks: Optional[Iterable[int]] = None,
         malicious_fraction: float = 0.0,
     ) -> bool:
+        # 判断当前客户端是否作为恶意样本参与
         if malicious_ranks:
             return client_rank in set(int(rank) for rank in malicious_ranks)
         if malicious_fraction > 0:
@@ -24,6 +27,7 @@ class AttackSimulator:
         return False
 
     def apply(self, delta_state: Dict[str, list]) -> Dict[str, list]:
+        # 对更新施加攻击扰动
         if self.method == "sign_flip":
             factor = -abs(self.scale or 1.0)
         elif self.method == "scale":

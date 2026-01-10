@@ -20,6 +20,9 @@ from server.privacy.accountant import RDPAccountant
 from server.security.malicious_detect import MaliciousDetectionAgent
 
 
+# CoordinatorAgent（AGENT.md 3.1.A）：
+# - 轮次调度、客户端采样、模型下发、聚合触发
+# - DP 参数下发、超时处理、指标记录
 class CoordinatorAgent:
     def __init__(
         self,
@@ -85,11 +88,13 @@ class CoordinatorAgent:
         self._deadline_timer: Optional[threading.Timer] = None
         self._eval_loader = None
         self._lock = threading.Lock()
+        # AggregationAgent：FedAvg + 鲁棒聚合
         self._aggregator = AggregationAgent()
         self._secure_agg = SecureAggregationAgent()
         self._forced_timeouts: Set[str] = set()
         self._cooldown_until: Dict[str, int] = {}
         self._cosine_reference: Optional[Dict[str, list]] = None
+        # MaliciousDetectionAgent：统计异常 + 余弦相似度检测
         self._detector = MaliciousDetectionAgent(
             loss_threshold=loss_threshold,
             norm_threshold=norm_threshold,
@@ -173,6 +178,7 @@ class CoordinatorAgent:
         self.server_update_clip = float(server_update_clip)
 
     def register_client(self, client_id: str) -> None:
+        # 记录注册客户端（用于参与资格判断）
         with self._lock:
             self.clients.add(client_id)
 
@@ -229,6 +235,7 @@ class CoordinatorAgent:
         return set()
 
     def _eligible_clients(self) -> List[str]:
+        # 可参与客户端：在线且未拉黑（ClientManagerAgent）
         if self.eligible_clients_provider is not None:
             eligible = list(self.eligible_clients_provider())
         else:
@@ -273,6 +280,7 @@ class CoordinatorAgent:
                 self._cooldown_until[client_id] = until_round
 
     def _forced_timeout_clients(self, active_clients: List[str]) -> Set[str]:
+        # 超时演示：指定客户端在本轮模拟超时
         cfg = self.timeout_simulation or {}
         if not bool(cfg.get("enabled", False)):
             return set()
@@ -280,22 +288,31 @@ class CoordinatorAgent:
         if rounds and self.current_round not in {int(r) for r in rounds}:
             return set()
         ids = {str(cid) for cid in cfg.get("client_ids", []) if cid}
-        names = {str(name) for name in cfg.get("client_names", []) if name}
+        rank_values = cfg.get("client_ranks", None)
+        if rank_values is None:
+            rank_values = cfg.get("malicious_ranks", [])
+        ranks = {int(rank) for rank in rank_values or []}
         forced: Set[str] = set()
         for client_id in active_clients:
             if client_id in ids:
                 forced.add(client_id)
                 continue
-            if self.client_name_lookup:
+            if ranks and self.client_name_lookup:
                 name = self.client_name_lookup(client_id)
-                if name in names:
-                    forced.add(client_id)
+                if name.startswith("client-"):
+                    try:
+                        rank = int(name.split("-", 1)[1]) - 1
+                    except ValueError:
+                        continue
+                    if rank in ranks:
+                        forced.add(client_id)
         return forced
 
     def _expected_client_count(self) -> int:
         return max(len(self.active_clients) - len(self._forced_timeouts), 0)
 
     def _select_clients(self, eligible_clients: List[str]) -> List[str]:
+        # 客户端采样（通信优化要求）
         if not eligible_clients:
             return []
         if not self.sampling_enabled or self.sampling_strategy == "random":
@@ -349,6 +366,7 @@ class CoordinatorAgent:
         return selected
 
     def _schedule_noise_multiplier(self) -> float:
+        # DP 噪声调度（自适应 RDP + 预设衰减）
         base = self.dp_noise_multiplier
         if (
             self.dp_mode == "adaptive_rdp"
@@ -406,6 +424,7 @@ class CoordinatorAgent:
             self._clip_norm_ema = (1.0 - ema) * self._clip_norm_ema + ema * target
         return float(self._clip_norm_ema)
     def get_round_payload(self, client_id: str) -> Dict[str, object]:
+        # 下发给客户端：模型参数 + 轮次配置 + 参与列表
         with self._lock:
             if self.training_done:
                 return {"status": "done"}
@@ -455,6 +474,7 @@ class CoordinatorAgent:
         clip_applied: Optional[bool] = None,
         attack_type: Optional[str] = None,
     ) -> Dict[str, object]:
+        # 接收客户端更新并在条件满足时触发聚合
         with self._lock:
             if self.training_done:
                 return {"status": "done"}
@@ -500,9 +520,11 @@ class CoordinatorAgent:
         return {"status": "accepted"}
 
     def _start_round(self, eligible_clients: Optional[List[str]] = None) -> None:
+        # 启动新一轮：采样客户端并发布 DP/训练参数
         self.current_round += 1
         if eligible_clients is None:
             eligible_clients = self._eligible_clients()
+        # 固定使用 pre 选择模式（已移除 post）
         self._round_selection_mode = "pre"
         self.active_clients = self._select_clients(sorted(eligible_clients))
         if self.sampling_record_selected is not None:
@@ -558,6 +580,7 @@ class CoordinatorAgent:
             self._finish_round(deadline_triggered=True)
 
     def _finish_round(self, deadline_triggered: bool = False) -> None:
+        # 聚合更新、异常检测、服务端评估、记录指标
         if self._deadline_timer is not None:
             self._deadline_timer.cancel()
             self._deadline_timer = None
@@ -666,6 +689,7 @@ class CoordinatorAgent:
         use_delta = any("delta_state" in update for update in updates)
         update_delta: Optional[Dict[str, list]] = None
         if use_masked:
+            # 安全聚合：先求和掩码更新，再按样本数归一化
             masked_updates = [update["masked_update"] for update in updates]
             summed = self._secure_agg.aggregate(masked_updates)
             averaged_delta = {
@@ -682,6 +706,7 @@ class CoordinatorAgent:
                 self.model_state = apply_delta(self.model_state, averaged_delta)
             update_delta = averaged_delta
         else:
+            # 普通/鲁棒聚合（FedAvg/trimmed/median/krum）
             method = self.robust_agg_method if not self.secure_aggregation else "fedavg"
             aggregated = self._aggregator.aggregate(
                 updates,
@@ -928,6 +953,7 @@ class CoordinatorAgent:
         participants: Optional[List[str]] = None,
         detection: Optional[Dict[str, object]] = None,
     ) -> None:
+        # 轮次指标打包并交给 MetricsAgent（AGENT.md 3.1.F/G）
         if self.metrics_agent is None:
             return
         epsilons = [float(update.get("epsilon") or 0.0) for update in updates]
@@ -1022,8 +1048,11 @@ class CoordinatorAgent:
                 client_id = str(client.get("client_id", ""))
                 client["cooldown"] = self._is_in_cooldown(client_id)
         eligible_clients = self._eligible_clients()
+        online_count = len(online_clients)
+        if online_clients and "online" in online_clients[0]:
+            online_count = sum(1 for client in online_clients if client.get("online"))
         client_counts = {
-            "online": len(online_clients),
+            "online": online_count,
             "eligible": len(eligible_clients),
             "registered": len(self.clients),
             "blacklisted": 0,
