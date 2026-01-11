@@ -167,15 +167,15 @@ class ClientManagerModule:
                 acc = float(update.get("accuracy", 0.0))
                 timely = float(update.get("timely", 1.0))
                 excluded = float(update.get("excluded", 0.0))
-                utility = acc - loss
+                utility = acc - loss  # 评分基准：准确率高、损失低
                 penalty = 0.0
                 if timely <= 0.0:
-                    penalty += timeout_penalty
+                    penalty += timeout_penalty  # 超时惩罚
                 if excluded > 0.0:
-                    penalty += anomaly_penalty
-                target = utility - penalty
+                    penalty += anomaly_penalty  # 异常/剔除惩罚
+                target = utility - penalty  # 本轮目标分
                 prev_score = float(info.get("score", 0.0))
-                info["score"] = (1.0 - ema) * prev_score + ema * target
+                info["score"] = (1.0 - ema) * prev_score + ema * target  # EMA 平滑更新
 
     def sampling_state(self) -> Dict[str, Dict[str, float]]:
         with self._lock:

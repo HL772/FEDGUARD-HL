@@ -320,7 +320,7 @@ class CoordinatorModule:
                 return list(eligible_clients)
             return random.sample(list(eligible_clients), self.clients_per_round)
 
-        state = self.sampling_state_provider() if self.sampling_state_provider else {}
+        state = self.sampling_state_provider() if self.sampling_state_provider else {}  # 拉取历史采样状态
         scores = {
             client_id: float(state.get(client_id, {}).get("score", 0.0))
             for client_id in eligible_clients
@@ -331,7 +331,7 @@ class CoordinatorModule:
         }
         selected: List[str] = []
         remaining = list(eligible_clients)
-        if self.sampling_fairness_window > 0:
+        if self.sampling_fairness_window > 0:  # 公平窗口：保证长时间未选中的客户端被补选
             overdue = [
                 client_id
                 for client_id in eligible_clients
@@ -341,13 +341,13 @@ class CoordinatorModule:
             ]
             if overdue:
                 if len(overdue) >= self.clients_per_round:
-                    remaining = list(overdue)
+                    remaining = list(overdue)  # 若超额，直接从过期集合内抽样
                 else:
-                    selected.extend(overdue)
+                    selected.extend(overdue)  # 先补齐过期客户端
                     remaining = [cid for cid in eligible_clients if cid not in selected]
         while remaining and len(selected) < self.clients_per_round:
             if random.random() < self.sampling_epsilon:
-                choice = random.choice(remaining)
+                choice = random.choice(remaining)  # 以 ε 概率随机探索
             else:
                 temp = max(self.sampling_softmax_temp, 1e-6)
                 max_score = max(scores.get(cid, 0.0) for cid in remaining)
@@ -360,7 +360,7 @@ class CoordinatorModule:
                     choice = random.choice(remaining)
                 else:
                     probs = [w / total for w in weights]
-                    choice = random.choices(remaining, weights=probs, k=1)[0]
+                    choice = random.choices(remaining, weights=probs, k=1)[0]  # 否则按评分采样
             selected.append(choice)
             remaining.remove(choice)
         return selected
@@ -407,6 +407,10 @@ class CoordinatorModule:
         return params
 
     def _update_clip_norm(self, update_norms: List[float]) -> float:
+        # 自适应裁剪：根据客户端更新范数分布动态调整 clip_norm
+        # - update_norms：本轮客户端更新的 L2 范数（来自 pre_dp_norm / update_norm）
+        # - percentile：使用分位数作为目标阈值（默认 0.9）
+        # - ema：用指数滑动平均平滑阈值变化
         if not update_norms:
             return float(self._clip_norm_ema or self.dp_clip_norm)
         if not bool(self.dp_adaptive_clip.get("enabled", False)):
@@ -416,11 +420,14 @@ class CoordinatorModule:
         percentile = max(0.0, min(1.0, percentile))
         ema = max(0.0, min(1.0, ema))
         sorted_vals = sorted(update_norms)
+        # 选取分位数位置作为目标阈值
         idx = int(round(percentile * (len(sorted_vals) - 1)))
         target = sorted_vals[idx]
         if self._clip_norm_ema is None:
+            # 首轮直接采用分位数阈值
             self._clip_norm_ema = target
         else:
+            # EMA 平滑：防止 clip_norm 波动过大
             self._clip_norm_ema = (1.0 - ema) * self._clip_norm_ema + ema * target
         return float(self._clip_norm_ema)
     def get_round_payload(self, client_id: str) -> Dict[str, object]:

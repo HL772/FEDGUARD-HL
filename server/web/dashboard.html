@@ -147,7 +147,7 @@
       <main>
         <section id="client-panel" class="panel">
           <!-- 客户端训练与通信指标 -->
-          <div class="grid">
+          <div class="grid client-metrics-grid">
             <div class="card chart-card">
               <div class="card-header-simple">
                 <h3><i class="fa-solid fa-arrow-trend-down"></i> 损失曲线</h3>
@@ -178,36 +178,35 @@
               </div>
               <canvas id="comm-chart"></canvas>
             </div>
-          </div>
-
-          <div class="card full-width">
-            <div class="card-header">
-              <h2><i class="fa-solid fa-list-ul"></i> 客户端更新详情</h2>
-              <div class="pager">
-                <button id="client-updates-prev" type="button" class="pager-btn" aria-label="上一轮">
-                  <i class="fa-solid fa-chevron-left"></i>
-                </button>
-                <span id="client-updates-label" class="pager-label">轮次 -</span>
-                <button id="client-updates-next" type="button" class="pager-btn" aria-label="下一轮">
-                  <i class="fa-solid fa-chevron-right"></i>
-                </button>
+            <div class="card client-updates-card">
+              <div class="card-header">
+                <h2><i class="fa-solid fa-list-ul"></i> 客户端更新详情</h2>
+                <div class="pager">
+                  <button id="client-updates-prev" type="button" class="pager-btn" aria-label="上一轮">
+                    <i class="fa-solid fa-chevron-left"></i>
+                  </button>
+                  <span id="client-updates-label" class="pager-label">轮次 -</span>
+                  <button id="client-updates-next" type="button" class="pager-btn" aria-label="下一轮">
+                    <i class="fa-solid fa-chevron-right"></i>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div class="table-container">
-              <table class="alert-table">
-                <thead>
-                  <tr>
-                    <th>客户端</th>
-                    <th>状态</th>
-                    <th>损失</th>
-                    <th>准确率</th>
-                    <th>ε</th>
-                    <th>上传 KB</th>
-                    <th>标签分布</th>
-                  </tr>
-                </thead>
-                <tbody id="client-update-body"></tbody>
-              </table>
+              <div class="table-container">
+                <table class="alert-table">
+                  <thead>
+                    <tr>
+                      <th>客户端</th>
+                      <th>状态</th>
+                      <th>损失</th>
+                      <th>准确率</th>
+                      <th>ε</th>
+                      <th>上传 KB</th>
+                      <th>标签分布</th>
+                    </tr>
+                  </thead>
+                  <tbody id="client-update-body"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -335,7 +334,7 @@
                 <div class="form-grid">
                   <div class="form-field">
                     <label for="launch-train-algo">
-                      训练算法
+                      联邦训练算法
                       <i class="fa-solid fa-circle-info tooltip-icon" data-tooltip="选择联邦学习聚合算法：FedAvg (基础), FedProx (处理异构性), FedPer (个性化)。"></i>
                     </label>
                     <div class="select-wrapper">
@@ -634,7 +633,7 @@
                   </div>
                   <div class="form-field">
                     <label for="launch-robust-method">
-                      鲁棒聚合
+                      服务端鲁棒聚合
                       <i class="fa-solid fa-circle-info tooltip-icon" data-tooltip="拜占庭容错聚合算法：Trimmed Mean, Median, Krum (抗攻击能力强)。"></i>
                     </label>
                     <div class="select-wrapper">

@@ -8,7 +8,7 @@ from fastapi import WebSocket
 
 from server.metrics.schema import normalize_round_metric
 
-# MetricsModule（AGENT.md 3.1.F）：
+# MetricsModule：
 # - 轮次指标 JSONL 持久化
 # - WebSocket 实时推送
 

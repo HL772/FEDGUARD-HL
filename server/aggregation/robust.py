@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 import torch
 
-# 鲁棒聚合工具（AGENT.md 3.1.C）：用于抵抗异常/恶意更新
+# 鲁棒聚合工具：用于抵抗异常/恶意更新
 
 
 def median_aggregate(states: List[Dict[str, list]]) -> Dict[str, list]:

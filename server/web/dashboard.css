@@ -272,6 +272,21 @@ body {
   margin-bottom: 24px;
 }
 
+.client-metrics-grid {
+  grid-template-columns: repeat(4, minmax(260px, 1fr));
+}
+
+.client-updates-card {
+  grid-column: span 3;
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.client-updates-card .table-container {
+  flex: 1;
+}
+
 .grid-manage {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -281,6 +296,15 @@ body {
 @media (max-width: 1024px) {
   .grid-manage {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1280px) {
+  .client-metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .client-updates-card {
+    grid-column: 1 / -1;
   }
 }
 

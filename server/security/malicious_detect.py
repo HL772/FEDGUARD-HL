@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
-# MaliciousDetectionModule（AGENT.md 3.1.E）：
+# MaliciousDetectionModule：
 # - 基于 loss/norm 的 MAD 异常检测
 # - 可选的余弦相似度异常检测
 
