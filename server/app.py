@@ -274,7 +274,8 @@ ONLINE_TTL_SEC = float(os.environ.get("ONLINE_TTL_SEC", "600"))
 CLIENT_MANAGER = ClientManagerModule(online_ttl_sec=ONLINE_TTL_SEC)
 
 # MetricsModule：轮次指标持久化与实时推送（性能监控）
-METRICS = MetricsModule("server/metrics/metrics.jsonl", clear_on_start=True)
+metrics_clear_on_start = os.environ.get("METRICS_CLEAR_ON_START", "0") == "1"
+METRICS = MetricsModule("server/metrics/metrics.jsonl", clear_on_start=metrics_clear_on_start)
 
 
 def _build_coordinator(
@@ -635,7 +636,8 @@ def session_start(req: StartSessionRequest) -> SessionStatusResponse:
         online_ttl_sec = float(req.online_ttl_sec or ONLINE_TTL_SEC)
         server_url = (req.server_url or "").strip() or _default_server_url()
 
-        METRICS.reset(clear_file=True)
+        if os.environ.get("METRICS_RESET_ON_SESSION_START", "1") == "1":
+            METRICS.reset(clear_file=True)
         global COORDINATOR
         COORDINATOR = _build_coordinator(
             merged_config,

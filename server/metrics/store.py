@@ -23,6 +23,26 @@ class MetricsModule:
         self._jsonl_path.parent.mkdir(parents=True, exist_ok=True)
         if clear_on_start:
             self._jsonl_path.write_text("", encoding="utf-8")
+        else:
+            self._load_from_disk()
+
+    def _load_from_disk(self) -> None:
+        # 启动时恢复历史指标，避免 dashboard 每次重置
+        if not self._jsonl_path.exists():
+            return
+        try:
+            with self._jsonl_path.open("r", encoding="utf-8") as handle:
+                for raw in handle:
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        parsed = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    self._metrics.append(normalize_round_metric(parsed))
+        except OSError:
+            return
 
     def set_event_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         # 绑定事件循环用于 WS 广播调度
