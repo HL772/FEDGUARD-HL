@@ -32,6 +32,9 @@ const state = {
   excludedClients: new Set(),
   processedRounds: new Set(),
   latestMetric: null,
+  topologyRound: 0,
+  topologyPinned: false,
+  scoreCache: new Map(),
   detectionTotals: {
     detected: 0,
     malicious: 0,
@@ -39,6 +42,7 @@ const state = {
   },
   attackMethods: new Set(),
 };
+
 
 function shortId(value) {
   if (!value) {
@@ -59,6 +63,149 @@ function formatMetric(value, digits) {
     return "-";
   }
   return Number(value).toFixed(digits);
+}
+
+function formatKb(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return "-";
+  }
+  return (Number(value) / 1024.0).toFixed(1);
+}
+
+function toggleFieldVisibility(el, visible) {
+  if (!el) {
+    return;
+  }
+  const wrapper = el.closest(".form-field");
+  if (!wrapper) {
+    return;
+  }
+  wrapper.classList.toggle("is-hidden", !visible);
+}
+
+function updateDpVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.dpEnabled || !elements.dpMode) {
+    return;
+  }
+  const dpEnabled = !!elements.dpEnabled.checked;
+  const dpMode = String(elements.dpMode.value || "off");
+  const dpActive = dpEnabled && dpMode !== "off";
+  const adaptiveMode = dpMode === "adaptive_rdp";
+  const adaptiveClip = !!(elements.dpAdaptive && elements.dpAdaptive.checked);
+  const scheduleType = String(elements.dpSchedule?.value || "");
+
+  toggleFieldVisibility(elements.dpMode, dpEnabled);
+  toggleFieldVisibility(elements.dpClip, dpActive);
+  toggleFieldVisibility(elements.dpNoise, dpActive);
+  toggleFieldVisibility(elements.dpDelta, dpActive);
+  toggleFieldVisibility(elements.dpTarget, dpActive);
+  toggleFieldVisibility(elements.dpSchedule, dpActive);
+  toggleFieldVisibility(elements.dpSigmaRatio, dpActive && !!scheduleType);
+  toggleFieldVisibility(elements.dpAdaptive, dpActive && adaptiveMode);
+  toggleFieldVisibility(elements.dpPercentile, dpActive && adaptiveMode && adaptiveClip);
+  toggleFieldVisibility(elements.dpEma, dpActive && adaptiveMode && adaptiveClip);
+}
+
+function updateCompressionVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.compressionEnabled) {
+    return;
+  }
+  const enabled = !!elements.compressionEnabled.checked;
+  toggleFieldVisibility(elements.topkRatio, enabled);
+  toggleFieldVisibility(elements.quantBits, enabled);
+  toggleFieldVisibility(elements.errorFeedback, enabled);
+}
+
+function updateSamplingVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.samplingEnabled || !elements.samplingStrategy) {
+    return;
+  }
+  const enabled = !!elements.samplingEnabled.checked;
+  const strategy = String(elements.samplingStrategy.value || "random");
+  const isScore = enabled && strategy === "score";
+  toggleFieldVisibility(elements.samplingStrategy, enabled);
+  toggleFieldVisibility(elements.samplingEpsilon, isScore);
+  toggleFieldVisibility(elements.samplingEma, isScore);
+  toggleFieldVisibility(elements.samplingTimeoutPenalty, isScore);
+  toggleFieldVisibility(elements.samplingAnomalyPenalty, isScore);
+  toggleFieldVisibility(elements.samplingFairness, isScore);
+  toggleFieldVisibility(elements.samplingSoftmax, isScore);
+}
+
+function updateAttackVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.attackEnabled || !elements.attackMethod) {
+    return;
+  }
+  const enabled = !!elements.attackEnabled.checked;
+  const method = String(elements.attackMethod.value || "scale");
+  const showScale = enabled && (method === "scale" || method === "sign_flip");
+  toggleFieldVisibility(elements.attackMethod, enabled);
+  toggleFieldVisibility(elements.attackScale, showScale);
+  toggleFieldVisibility(elements.attackFraction, enabled);
+  toggleFieldVisibility(elements.attackRanks, enabled);
+  toggleFieldVisibility(elements.attackLabelFlip, enabled);
+  toggleFieldVisibility(elements.attackLossScale, enabled);
+  toggleFieldVisibility(elements.attackAccScale, enabled);
+}
+
+function updateSecurityVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.maliciousDetect || !elements.robustMethod) {
+    return;
+  }
+  const detectEnabled = !!elements.maliciousDetect.checked;
+  const cosineEnabled = !!elements.cosineEnabled?.checked;
+  const robustMethod = String(elements.robustMethod.value || "fedavg");
+  const useTrim = robustMethod === "trimmed_mean";
+  const useByzantine = robustMethod === "krum" || robustMethod === "bulyan";
+
+  toggleFieldVisibility(elements.lossThreshold, detectEnabled);
+  toggleFieldVisibility(elements.normThreshold, detectEnabled);
+  toggleFieldVisibility(elements.requireBoth, detectEnabled);
+  toggleFieldVisibility(elements.minMad, detectEnabled);
+  toggleFieldVisibility(elements.cosineEnabled, detectEnabled);
+  toggleFieldVisibility(elements.cosineThreshold, detectEnabled && cosineEnabled);
+  toggleFieldVisibility(elements.cosineTopk, detectEnabled && cosineEnabled);
+
+  toggleFieldVisibility(elements.trimRatio, useTrim);
+  toggleFieldVisibility(elements.byzantineF, useByzantine);
+}
+
+function updateTrainVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.trainAlgo) {
+    return;
+  }
+  const algo = String(elements.trainAlgo.value || "fedavg");
+  const isFedProx = algo === "fedprox";
+  const isFedPer = algo === "fedper" || algo === "fedper_dual";
+  toggleFieldVisibility(elements.fedproxMu, isFedProx);
+  toggleFieldVisibility(elements.privateHeadLr, isFedPer);
+  toggleFieldVisibility(elements.privateHeadEpochs, isFedPer);
+}
+
+function updateTimeoutVisibility() {
+  const elements = getLaunchElements();
+  if (!elements.timeoutEnabled) {
+    return;
+  }
+  const enabled = !!elements.timeoutEnabled.checked;
+  toggleFieldVisibility(elements.timeoutRanks, enabled);
+  toggleFieldVisibility(elements.timeoutCooldown, enabled);
+}
+
+function updateLaunchVisibility() {
+  updateDpVisibility();
+  updateCompressionVisibility();
+  updateSamplingVisibility();
+  updateAttackVisibility();
+  updateSecurityVisibility();
+  updateTrainVisibility();
+  updateTimeoutVisibility();
 }
 
 function resetSummaryCards() {
@@ -110,8 +257,13 @@ function resetUiState() {
   state.excludedClients = new Set();
   state.processedRounds = new Set();
   state.latestMetric = null;
+  state.topologyRound = 0;
+  state.topologyPinned = false;
+  state.scoreCache = new Map();
   state.detectionTotals = { detected: 0, malicious: 0, truePositive: 0 };
   state.attackMethods = new Set();
+
+  updateTopology({});
 
   const roundEl = document.getElementById("round-id");
   if (roundEl) {
@@ -131,6 +283,169 @@ function resetUiState() {
   }
   resetSummaryCards();
   rebuildSeries();
+}
+
+function updateTopology(metric) {
+  const stage = document.getElementById("topology-stage");
+  const nodeContainer = document.getElementById("topology-nodes");
+  const lines = document.getElementById("topology-lines");
+  const tooltip = document.getElementById("topology-tooltip");
+  if (!stage || !nodeContainer || !lines) {
+    return;
+  }
+  const rect = stage.getBoundingClientRect();
+  if (rect.width < 100 || rect.height < 100) {
+    return;
+  }
+  nodeContainer.innerHTML = "";
+  lines.innerHTML = "";
+  const clients = Array.isArray(metric.online_clients) ? metric.online_clients : [];
+  if (!clients.length) {
+    const empty = document.createElement("div");
+    empty.className = "topology-empty";
+    empty.textContent = "-";
+    nodeContainer.appendChild(empty);
+    return;
+  }
+  const participants = new Set((metric.participants || []).map((value) => String(value)));
+  const dropped = new Set((metric.dropped_clients || []).map((value) => String(value)));
+  const excluded = new Set(
+    (metric.robust?.excluded_clients || []).map((value) => String(value))
+  );
+  const updateMap = new Map();
+  if (Array.isArray(metric.client_updates)) {
+    metric.client_updates.forEach((update) => {
+      if (update && update.client_id) {
+        updateMap.set(String(update.client_id), update);
+      }
+    });
+  }
+  const nodes = [];
+  clients.forEach((client) => {
+    const clientId = String(client.client_id || "");
+    const name = formatClientLabel(clientId, client.client_name || "");
+    const node = document.createElement("div");
+    node.classList.add("client-node");
+    const isSelected = participants.has(clientId);
+    const isExcluded = !!client.blacklisted || excluded.has(clientId);
+    const isTimeout = dropped.has(clientId) || !!client.cooldown;
+    const isOnline = client.online !== false;
+    if (isSelected) {
+      node.classList.add("is-selected");
+    }
+    if (isExcluded) {
+      node.classList.add("is-excluded");
+    } else if (isTimeout) {
+      node.classList.add("is-timeout");
+    } else if (!isOnline) {
+      node.classList.add("is-offline");
+    } else {
+      node.classList.add("is-online");
+    }
+    node.dataset.clientId = clientId;
+    node.dataset.selected = isSelected ? "1" : "0";
+    node.dataset.timeout = isTimeout ? "1" : "0";
+    node.dataset.excluded = isExcluded ? "1" : "0";
+    node.innerHTML = `<span>${name}</span>`;
+    node.title = `${name} (${clientId})`;
+    if (tooltip) {
+      node.addEventListener("mouseenter", () => {
+        showTopologyTooltip(
+          node,
+          stage,
+          tooltip,
+          updateMap.get(clientId),
+          {
+            isSelected,
+            isExcluded,
+            isTimeout,
+            isOnline,
+          },
+          name
+        );
+      });
+      node.addEventListener("mouseleave", () => {
+        hideTopologyTooltip(tooltip);
+      });
+    }
+    nodeContainer.appendChild(node);
+    nodes.push(node);
+  });
+  if (tooltip) {
+    stage.onmouseleave = () => hideTopologyTooltip(tooltip);
+  }
+  layoutTopology(stage, nodes, lines, rect);
+}
+
+function showTopologyTooltip(node, stage, tooltip, update, flags, label) {
+  const rect = stage.getBoundingClientRect();
+  const nodeRect = node.getBoundingClientRect();
+  const x = nodeRect.left - rect.left + nodeRect.width / 2;
+  const y = nodeRect.top - rect.top;
+  let statusLabel = "在线";
+  if (flags.isExcluded) {
+    statusLabel = "拉黑";
+  } else if (flags.isTimeout) {
+    statusLabel = "超时";
+  } else if (!flags.isOnline) {
+    statusLabel = "离线";
+  } else if (flags.isSelected) {
+    statusLabel = "参与";
+  } else {
+    statusLabel = "未参与";
+  }
+  const loss = update ? formatMetric(update.train_loss, 4) : "-";
+  const acc = update ? formatMetric(update.train_accuracy, 4) : "-";
+  const epsilon = update ? formatMetric(update.epsilon, 4) : "-";
+  const upload = update ? formatKb(update.upload_bytes) : "-";
+  tooltip.innerHTML = `
+    <div class="tooltip-title">${label}</div>
+    <div class="tooltip-row"><span>状态</span><strong>${statusLabel}</strong></div>
+    <div class="tooltip-row"><span>Loss</span><strong>${loss}</strong></div>
+    <div class="tooltip-row"><span>Accuracy</span><strong>${acc}</strong></div>
+    <div class="tooltip-row"><span>ε</span><strong>${epsilon}</strong></div>
+    <div class="tooltip-row"><span>上传 KB</span><strong>${upload}</strong></div>
+  `;
+  tooltip.style.left = `${x}px`;
+  tooltip.style.top = `${y}px`;
+  tooltip.classList.add("show");
+}
+
+function hideTopologyTooltip(tooltip) {
+  tooltip.classList.remove("show");
+}
+
+function layoutTopology(stage, nodes, lines, rect) {
+  if (!nodes.length) {
+    return;
+  }
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+  const radius = Math.max(Math.min(centerX, centerY) - 60, 80);
+  lines.setAttribute("width", rect.width);
+  lines.setAttribute("height", rect.height);
+  lines.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
+  lines.innerHTML = "";
+  nodes.forEach((node, idx) => {
+    const angle = (2 * Math.PI * idx) / nodes.length - Math.PI / 2;
+    const x = centerX + radius * Math.cos(angle);
+    const y = centerY + radius * Math.sin(angle);
+    node.style.left = `${x}px`;
+    node.style.top = `${y}px`;
+    if (node.dataset.selected === "1") {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", String(centerX));
+      line.setAttribute("y1", String(centerY));
+      line.setAttribute("x2", String(x));
+      line.setAttribute("y2", String(y));
+      if (node.dataset.excluded === "1") {
+        line.classList.add("is-excluded");
+      } else if (node.dataset.timeout === "1") {
+        line.classList.add("is-timeout");
+      }
+      lines.appendChild(line);
+    }
+  });
 }
 
 function updateSpinner(active) {
@@ -410,6 +725,7 @@ async function loadDefaultConfig() {
       elements.timeoutRanks.value = ranks.map((value) => String(value)).join(",");
     }
     setFieldValue(elements.timeoutCooldown, timeout.cooldown_rounds);
+    updateLaunchVisibility();
   } catch (err) {
     console.warn("load default config failed", err);
   }
@@ -458,6 +774,7 @@ async function loadSessionStatus() {
     if (elements.trainAlgo && params.train_algo) {
       elements.trainAlgo.value = params.train_algo;
     }
+    updateLaunchVisibility();
   } catch (err) {
     console.warn("load session status failed", err);
   }
@@ -1182,6 +1499,49 @@ function getRoundIds() {
     .sort((a, b) => a - b);
 }
 
+function updateTopologyControls() {
+  const slider = document.getElementById("topology-round");
+  const label = document.getElementById("topology-round-label");
+  if (!slider || !label) {
+    return;
+  }
+  const rounds = getRoundIds();
+  if (!rounds.length) {
+    slider.disabled = true;
+    label.textContent = "展示轮次 -";
+    return;
+  }
+  slider.disabled = false;
+  const minRound = rounds[0];
+  const maxRound = rounds[rounds.length - 1];
+  slider.min = String(minRound);
+  slider.max = String(maxRound);
+  if (!state.topologyPinned || state.topologyRound === 0) {
+    state.topologyRound = maxRound;
+    state.topologyPinned = false;
+  } else {
+    state.topologyRound = Math.min(Math.max(state.topologyRound, minRound), maxRound);
+    state.topologyPinned = state.topologyRound < maxRound;
+  }
+  slider.value = String(state.topologyRound);
+  label.textContent = `展示轮次 ${state.topologyRound}`;
+}
+
+function getTopologyMetric() {
+  const roundId = state.topologyPinned ? state.topologyRound : state.lastRound;
+  if (!roundId) {
+    return null;
+  }
+  return state.metricsByRound[roundId] || null;
+}
+
+function updateTopologyView() {
+  const metric = getTopologyMetric();
+  if (metric) {
+    updateTopology(metric);
+  }
+}
+
 function rebuildSeries() {
   // 由 metricsByRound 重建曲线序列
   const roundIds = getRoundIds();
@@ -1444,6 +1804,54 @@ function updateSimilarityRank(metric, nameMap) {
   });
 }
 
+function updateContributionRank(metric, nameMap) {
+  const list = document.getElementById("contribution-rank");
+  if (!list) {
+    return;
+  }
+  list.innerHTML = "";
+  const rank = metric.sampling?.score_rank || [];
+  if (!Array.isArray(rank) || rank.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "-";
+    list.appendChild(li);
+    return;
+  }
+  rank.forEach((entry, idx) => {
+    const clientId = String(entry[0] || "");
+    const score = Number(entry[1]);
+    const prev = state.scoreCache.get(clientId);
+    let deltaText = "—";
+    let deltaClass = "flat";
+    if (Number.isFinite(score) && Number.isFinite(prev)) {
+      const delta = score - prev;
+      if (delta > 0.001) {
+        deltaText = `↑${delta.toFixed(3)}`;
+        deltaClass = "up";
+      } else if (delta < -0.001) {
+        deltaText = `↓${Math.abs(delta).toFixed(3)}`;
+        deltaClass = "down";
+      } else {
+        deltaText = "→0.000";
+      }
+    }
+    const name = nameMap ? nameMap.get(clientId) : "";
+    const label = formatClientLabel(clientId || "-", name || "");
+    const li = document.createElement("li");
+    li.classList.add("rank-item");
+    const scoreText = Number.isFinite(score) ? score.toFixed(3) : "-";
+    li.innerHTML = `
+      <span>${idx + 1}. ${label}</span>
+      <span class="rank-score">${scoreText}</span>
+      <span class="rank-delta ${deltaClass}">${deltaText}</span>
+    `;
+    list.appendChild(li);
+    if (Number.isFinite(score)) {
+      state.scoreCache.set(clientId, score);
+    }
+  });
+}
+
 function applyMetric(metric) {
   // 单条指标入库并驱动 UI 更新
   const roundId = Number(metric.round_id || 0);
@@ -1516,6 +1924,8 @@ function applyMetric(metric) {
     updateClientUpdatesControls();
   }
   updateSummaryCards(metric);
+  updateTopologyControls();
+  updateTopologyView();
   rebuildSeries();
 
   updateSummary([
@@ -1525,6 +1935,7 @@ function applyMetric(metric) {
   ]);
   updateSecuritySummary(metric);
   updateSimilarityRank(metric, nameMap);
+  updateContributionRank(metric, nameMap);
 }
 
 let pollTimer = null;
@@ -1632,6 +2043,12 @@ async function init() {
           const panel = document.getElementById(target);
           if (panel) {
             panel.classList.add("active");
+            if (target === "run-panel") {
+              setTimeout(() => {
+                updateTopologyControls();
+                updateTopologyView();
+              }, 50);
+            }
           }
         }
       });
@@ -1644,6 +2061,23 @@ async function init() {
     }
     if (nextBtn) {
       nextBtn.addEventListener("click", () => navigateClientUpdates(1));
+    }
+
+    const topologySlider = document.getElementById("topology-round");
+    if (topologySlider) {
+      topologySlider.addEventListener("input", () => {
+        const value = Number(topologySlider.value || 0);
+        state.topologyRound = value;
+        state.topologyPinned = value > 0 && value < state.lastRound;
+        const label = document.getElementById("topology-round-label");
+        if (label) {
+          label.textContent = value > 0 ? `展示轮次 ${value}` : "展示轮次 -";
+        }
+        const metric = state.metricsByRound[value];
+        if (metric) {
+          updateTopology(metric);
+        }
+      });
     }
 
     const manageBody = document.getElementById("client-manage-body");
@@ -1680,12 +2114,76 @@ async function init() {
       launchStop.addEventListener("click", stopSession);
     }
 
+    const dpEnabled = document.getElementById("launch-dp-enabled");
+    if (dpEnabled) {
+      dpEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+    const dpMode = document.getElementById("launch-dp-mode");
+    if (dpMode) {
+      dpMode.addEventListener("change", updateLaunchVisibility);
+    }
+    const dpAdaptive = document.getElementById("launch-dp-adaptive");
+    if (dpAdaptive) {
+      dpAdaptive.addEventListener("change", updateLaunchVisibility);
+    }
+    const dpSchedule = document.getElementById("launch-dp-schedule");
+    if (dpSchedule) {
+      dpSchedule.addEventListener("change", updateLaunchVisibility);
+    }
+
+    const compressionEnabled = document.getElementById("launch-compression-enabled");
+    if (compressionEnabled) {
+      compressionEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+    const samplingEnabled = document.getElementById("launch-sampling-enabled");
+    if (samplingEnabled) {
+      samplingEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+    const samplingStrategy = document.getElementById("launch-sampling-strategy");
+    if (samplingStrategy) {
+      samplingStrategy.addEventListener("change", updateLaunchVisibility);
+    }
+    const attackEnabled = document.getElementById("launch-attack-enabled");
+    if (attackEnabled) {
+      attackEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+    const attackMethod = document.getElementById("launch-attack-method");
+    if (attackMethod) {
+      attackMethod.addEventListener("change", updateLaunchVisibility);
+    }
+    const maliciousDetect = document.getElementById("launch-malicious-detect");
+    if (maliciousDetect) {
+      maliciousDetect.addEventListener("change", updateLaunchVisibility);
+    }
+    const cosineEnabled = document.getElementById("launch-cosine-enabled");
+    if (cosineEnabled) {
+      cosineEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+    const robustMethod = document.getElementById("launch-robust-method");
+    if (robustMethod) {
+      robustMethod.addEventListener("change", updateLaunchVisibility);
+    }
+    const trainAlgo = document.getElementById("launch-train-algo");
+    if (trainAlgo) {
+      trainAlgo.addEventListener("change", updateLaunchVisibility);
+    }
+    const timeoutEnabled = document.getElementById("launch-timeout-enabled");
+    if (timeoutEnabled) {
+      timeoutEnabled.addEventListener("change", updateLaunchVisibility);
+    }
+
     setupHelpModal();
     setLaunchStatus("状态：未启动", false);
     await loadDefaultConfig();
     await loadSessionStatus();
     await loadHistory();
+    updateTopologyControls();
+    updateTopologyView();
     await refreshOnlineClients();
+    window.addEventListener("resize", () => {
+      updateTopologyControls();
+      updateTopologyView();
+    });
     if (!sessionPoller) {
       sessionPoller = window.setInterval(() => {
         loadSessionStatus();

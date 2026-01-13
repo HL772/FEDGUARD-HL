@@ -51,7 +51,7 @@ train:  # 训练与调度
   fedprox_mu: 0.01
   deadline_ms: 0
   server_lr: 0.2
-  server_update_clip: 100.0
+  server_update_clip: 20.0
   private_head_lr: 0.1
   private_head_epochs: 2
   lr: 0.02

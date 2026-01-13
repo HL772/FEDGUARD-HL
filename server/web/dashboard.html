@@ -133,6 +133,9 @@
         <button class="tab active" data-target="launch-panel">
           <i class="fa-solid fa-rocket"></i> 启动配置
         </button>
+        <button class="tab" data-target="run-panel">
+          <i class="fa-solid fa-tower-broadcast"></i> 运行监控
+        </button>
         <button class="tab" data-target="client-panel">
           <i class="fa-solid fa-chart-line"></i> 客户端指标
         </button>
@@ -145,6 +148,57 @@
       </nav>
 
       <main>
+        <section id="run-panel" class="panel">
+          <div class="grid">
+            <div class="card topology-card">
+              <div class="card-header-simple topology-header">
+                <h3><i class="fa-solid fa-sitemap"></i> 通信拓扑</h3>
+                <div class="topology-controls">
+                  <label for="topology-round">轮次筛选</label>
+                  <input id="topology-round" type="range" min="1" max="1" value="1" />
+                  <span id="topology-round-label" class="topology-round-label">展示轮次 -</span>
+                </div>
+              </div>
+              <div id="topology-stage" class="topology-stage">
+                <svg id="topology-lines" class="topology-lines"></svg>
+                <div class="server-node">
+                  <div class="server-core"></div>
+                  <span>Server</span>
+                </div>
+                <div id="topology-nodes" class="topology-nodes"></div>
+                <div id="topology-tooltip" class="topology-tooltip"></div>
+              </div>
+              <div class="topology-legend">
+                <span class="legend-item legend-online">在线</span>
+                <span class="legend-item legend-selected">参与</span>
+                <span class="legend-item legend-timeout">超时</span>
+                <span class="legend-item legend-excluded">拉黑</span>
+                <span class="legend-item legend-offline">离线</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header-simple">
+              <h3><i class="fa-solid fa-triangle-exclamation"></i> 系统告警与日志</h3>
+            </div>
+            <div class="table-container">
+              <table class="alert-table">
+                <thead>
+                  <tr>
+                    <th>轮次</th>
+                    <th>时间</th>
+                    <th>客户端</th>
+                    <th>原因</th>
+                    <th>动作</th>
+                  </tr>
+                </thead>
+                <tbody id="alert-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section id="client-panel" class="panel">
           <!-- 客户端训练与通信指标 -->
           <div class="grid client-metrics-grid">
@@ -239,25 +293,6 @@
             </div>
           </div>
 
-          <div class="card mt-4">
-            <div class="card-header-simple">
-              <h3><i class="fa-solid fa-triangle-exclamation"></i> 系统告警与日志</h3>
-            </div>
-            <div class="table-container">
-              <table class="alert-table">
-                <thead>
-                  <tr>
-                    <th>轮次</th>
-                    <th>时间</th>
-                    <th>客户端</th>
-                    <th>原因</th>
-                    <th>动作</th>
-                  </tr>
-                </thead>
-                <tbody id="alert-body"></tbody>
-              </table>
-            </div>
-          </div>
         </section>
 
         <section id="launch-panel" class="panel active">
@@ -859,6 +894,12 @@
               </div>
               <ul id="similarity-rank" class="client-list"></ul>
             </div>
+            <div class="card">
+              <div class="card-header-simple">
+                <h3><i class="fa-solid fa-trophy"></i> 客户端贡献排行</h3>
+              </div>
+              <ul id="contribution-rank" class="client-list"></ul>
+            </div>
           </div>
         </section>
       </main>
@@ -904,6 +945,7 @@
             <li><strong>服务端评估损失/准确率</strong>：聚合后的全局模型在验证集上的表现。</li>
             <li><strong>聚合更新范数</strong>：本轮聚合更新的向量范数。</li>
             <li><strong>个体准确率公平性</strong>：参与客户端的准确率均值、最小值、标准差与 Jain 指数。</li>
+            <li><strong>客户端贡献排行</strong>：按采样评分排序，显示分数及相对上一轮的变化趋势。</li>
           </ul>
 
           <h3>概览卡片</h3>
@@ -927,6 +969,7 @@
             <li><strong>客户端管理</strong>：手动拉黑或解除在线客户端。</li>
             <li><strong>检测摘要</strong>：恶意检测精确率/召回率/F1 与阈值。</li>
             <li><strong>相似度排名</strong>：客户端更新与参考方向的相似度 z 分数排名。</li>
+            <li><strong>通信拓扑</strong>：展示参与/超时/拉黑/离线状态，并支持轮次滑杆回看。</li>
             <li><strong>告警日志</strong>：异常原因与处置记录。</li>
           </ul>
         </div>

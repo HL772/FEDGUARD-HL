@@ -20,7 +20,7 @@ from server.privacy.accountant import RDPAccountant
 from server.security.malicious_detect import MaliciousDetectionModule
 
 
-# CoordinatorModule（AGENT.md 3.1.A）：
+# CoordinatorModule：
 # - 轮次调度、客户端采样、模型下发、聚合触发
 # - DP 参数下发、超时处理、指标记录
 class CoordinatorModule:
