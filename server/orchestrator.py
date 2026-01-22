@@ -960,7 +960,6 @@ class CoordinatorModule:
         participants: Optional[List[str]] = None,
         detection: Optional[Dict[str, object]] = None,
     ) -> None:
-        # 轮次指标打包并交给 MetricsModule（AGENT.md 3.1.F/G）
         if self.metrics_agent is None:
             return
         epsilons = [float(update.get("epsilon") or 0.0) for update in updates]
@@ -1154,6 +1153,9 @@ class CoordinatorModule:
                 client_id: float(info.get("score", 0.0)) for client_id, info in state.items()
             }
             timeout_total = sum(float(info.get("timeout_cnt", 0.0)) for info in state.values())
+            timeout_clients = sum(
+                1 for info in state.values() if float(info.get("timeout_cnt", 0.0)) > 0.0
+            )
             selected_total = sum(float(info.get("selected_cnt", 0.0)) for info in state.values())
             timeout_rate = timeout_total / selected_total if selected_total > 0 else 0.0
             score_rank = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:5]
@@ -1161,6 +1163,7 @@ class CoordinatorModule:
                 {
                     "selection_histogram": selection_histogram,
                     "timeout_rate": timeout_rate,
+                    "timeout_clients": timeout_clients,
                     "score_rank": score_rank,
                 }
             )

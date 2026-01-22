@@ -70,7 +70,6 @@ def apply_delta_partial(
 
 
 class AggregationModule:
-    # AggregationModule（AGENT.md 3.1.C）：FedAvg + 鲁棒聚合
     def aggregate(
         self,
         updates: List[Dict[str, object]],

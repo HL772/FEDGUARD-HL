@@ -26,7 +26,6 @@ from client.train.local_trainer import (
     update_state_dict_from_list,
 )
 
-# 客户端主进程（AGENT.md 3.2.H/I/J/K/L/M）：
 # - 数据切分、训练、DP、压缩、掩码与通信上报
 
 

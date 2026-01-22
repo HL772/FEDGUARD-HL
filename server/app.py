@@ -27,7 +27,6 @@ from client.compression.topk import decompress_state
 # 服务端入口（课设要求对应点）：
 # - REST API：join/heartbeat/get_model/submit_update
 # - WebSocket 指标推送
-# - Dashboard 静态页面托管（AGENT.md 2.x / 3.1 A/B/F/G）
 
 
 def _parse_value(raw: str) -> Any:

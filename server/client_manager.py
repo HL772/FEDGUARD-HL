@@ -4,7 +4,6 @@ import uuid
 from typing import Dict, List, Optional, Tuple
 
 
-# ClientManagerModule（AGENT.md 3.1.B）：
 # - 注册与心跳
 # - 在线/可参与资格维护
 # - 拉黑管理（恶意检测 + 手动管理）

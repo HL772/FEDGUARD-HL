@@ -3,7 +3,6 @@ from typing import Dict, Tuple
 
 import torch
 
-# DifferentialPrivacyModule（AGENT.md 3.2.J）：
 # - 客户端侧执行 DP-SGD 的核心步骤（裁剪 + 加噪）
 # - 该文件仅负责“执行”，自适应裁剪与噪声调度由服务端下发参数
 

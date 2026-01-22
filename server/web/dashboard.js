@@ -2,7 +2,6 @@ if (typeof Chart === "undefined") {
   console.error("Chart.js is not loaded.");
 }
 
-// Dashboard 前端逻辑（AGENT.md 3.1.G / 5.x）：
 // - 消费 MetricsModule 推送的轮次指标
 // - 渲染客户端/服务端曲线、告警与管理视图
 const state = {
@@ -218,6 +217,7 @@ function resetSummaryCards() {
     "summary-sampling": "-",
     "summary-epsilon": "-",
     "summary-upload": "-",
+    "summary-update-norm": "-",
     "summary-compress": "-",
     "summary-excluded": "-",
     "summary-timeout": "-",
@@ -346,7 +346,8 @@ function updateTopology(metric) {
     node.dataset.selected = isSelected ? "1" : "0";
     node.dataset.timeout = isTimeout ? "1" : "0";
     node.dataset.excluded = isExcluded ? "1" : "0";
-    node.innerHTML = `<span>${name}</span>`;
+    node.dataset.online = isOnline ? "1" : "0";
+    node.innerHTML = `<span class="node-dot"></span><span class="node-label">${name}</span>`;
     node.title = `${name} (${clientId})`;
     if (tooltip) {
       node.addEventListener("mouseenter", () => {
@@ -382,25 +383,23 @@ function showTopologyTooltip(node, stage, tooltip, update, flags, label) {
   const nodeRect = node.getBoundingClientRect();
   const x = nodeRect.left - rect.left + nodeRect.width / 2;
   const y = nodeRect.top - rect.top;
-  let statusLabel = "在线";
+  const onlineLabel = flags.isOnline ? "在线" : "离线";
+  let actionLabel = "正常";
   if (flags.isExcluded) {
-    statusLabel = "拉黑";
+    actionLabel = "拉黑";
   } else if (flags.isTimeout) {
-    statusLabel = "超时";
-  } else if (!flags.isOnline) {
-    statusLabel = "离线";
-  } else if (flags.isSelected) {
-    statusLabel = "参与";
-  } else {
-    statusLabel = "未参与";
+    actionLabel = "超时";
   }
+  const selectedLabel = flags.isSelected ? "参与" : "未参与";
   const loss = update ? formatMetric(update.train_loss, 4) : "-";
   const acc = update ? formatMetric(update.train_accuracy, 4) : "-";
   const epsilon = update ? formatMetric(update.epsilon, 4) : "-";
   const upload = update ? formatKb(update.upload_bytes) : "-";
   tooltip.innerHTML = `
     <div class="tooltip-title">${label}</div>
-    <div class="tooltip-row"><span>状态</span><strong>${statusLabel}</strong></div>
+    <div class="tooltip-row"><span>在线</span><strong>${onlineLabel}</strong></div>
+    <div class="tooltip-row"><span>参与</span><strong>${selectedLabel}</strong></div>
+    <div class="tooltip-row"><span>处置</span><strong>${actionLabel}</strong></div>
     <div class="tooltip-row"><span>Loss</span><strong>${loss}</strong></div>
     <div class="tooltip-row"><span>Accuracy</span><strong>${acc}</strong></div>
     <div class="tooltip-row"><span>ε</span><strong>${epsilon}</strong></div>
@@ -421,7 +420,7 @@ function layoutTopology(stage, nodes, lines, rect) {
   }
   const centerX = rect.width / 2;
   const centerY = rect.height / 2;
-  const radius = Math.max(Math.min(centerX, centerY) - 60, 80);
+  const radius = Math.max(Math.min(centerX, centerY) - 18, 130);
   lines.setAttribute("width", rect.width);
   lines.setAttribute("height", rect.height);
   lines.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
@@ -1372,8 +1371,10 @@ function updateSummaryCards(metric) {
   const epsilonMax = metric.privacy?.epsilon_max || 0;
   const uploadKb = (metric.comm?.upload_bytes_total || 0) / 1024.0;
   const compressedRatio = metric.comm?.compressed_ratio || 1;
+  const updateNorm = metric.server?.update_norm || 0;
   const excluded = metric.client_counts?.blacklisted ?? state.excludedClients.size;
-  const timeoutCount = (metric.dropped_clients || []).length;
+  const timeoutCount =
+    metric.sampling?.timeout_clients ?? (metric.dropped_clients || []).length;
 
   document.getElementById("summary-round").textContent = roundId;
   document.getElementById("summary-participants").textContent = `${participants.length}/${eligible}`;
@@ -1383,6 +1384,7 @@ function updateSummaryCards(metric) {
   document.getElementById("summary-sampling").textContent = samplingLabel;
   document.getElementById("summary-epsilon").textContent = epsilonMax.toFixed(4);
   document.getElementById("summary-upload").textContent = uploadKb.toFixed(1);
+  document.getElementById("summary-update-norm").textContent = updateNorm.toFixed(3);
   document.getElementById("summary-compress").textContent = compressedRatio.toFixed(2);
   document.getElementById("summary-excluded").textContent = excluded;
   document.getElementById("summary-timeout").textContent = timeoutCount;

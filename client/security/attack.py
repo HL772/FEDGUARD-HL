@@ -3,7 +3,6 @@ from typing import Dict, Iterable, Optional
 
 import torch
 
-# 攻击模拟（AGENT.md 3.1.E 验收）：scale / sign-flip
 
 
 class AttackSimulator:

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FedGuard 仪表盘</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
       rel="stylesheet"
     />
     <link
@@ -60,7 +60,7 @@
         <div class="summary-card">
           <div class="icon-wrapper"><i class="fa-solid fa-users-viewfinder"></i></div>
           <div class="summary-content">
-            <span class="label">参与 / 总数</span>
+            <span class="label">参与 / 可用</span>
             <span class="value" id="summary-participants">-</span>
           </div>
         </div>
@@ -104,6 +104,13 @@
           <div class="summary-content">
             <span class="label">上传总量</span>
             <span class="value" id="summary-upload">-</span>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="icon-wrapper"><i class="fa-solid fa-ruler-combined"></i></div>
+          <div class="summary-content">
+            <span class="label">聚合更新范数</span>
+            <span class="value" id="summary-update-norm">-</span>
           </div>
         </div>
         <div class="summary-card">
@@ -957,9 +964,10 @@
             <li><strong>采样</strong>：客户端选择策略与模式。</li>
             <li><strong>ε 最大值</strong>：本轮客户端隐私消耗最大值。</li>
             <li><strong>上传总量</strong>：本轮客户端上传数据总 KB。</li>
+            <li><strong>聚合更新范数</strong>：本轮聚合更新向量的范数大小。</li>
             <li><strong>压缩比</strong>：压缩前后字节比值。</li>
             <li><strong>拉黑数</strong>：已被检测并拉黑的客户端数量。</li>
-            <li><strong>超时数</strong>：本轮超时客户端数量。</li>
+            <li><strong>超时数</strong>：发生过超时的客户端数量。</li>
           </ul>
 
           <h3>列表与告警</h3>

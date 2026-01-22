@@ -1,6 +1,5 @@
 from typing import Any, Dict, List
 
-# 指标归一化（AGENT.md 5.x）：保证 Dashboard 结构稳定
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -97,6 +96,7 @@ def normalize_round_metric(metric: Dict[str, Any]) -> Dict[str, Any]:
     sampling["epsilon"] = _as_float(sampling.get("epsilon"), 0.0)
     sampling["fairness_window"] = _as_int(sampling.get("fairness_window"), 0)
     sampling["timeout_rate"] = _as_float(sampling.get("timeout_rate"), 0.0)
+    sampling["timeout_clients"] = _as_int(sampling.get("timeout_clients"), 0)
     sampling["selection_histogram"] = dict(sampling.get("selection_histogram") or {})
     sampling["score_rank"] = list(sampling.get("score_rank") or [])
     data["sampling"] = sampling
